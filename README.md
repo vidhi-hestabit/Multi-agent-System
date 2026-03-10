@@ -3,5 +3,4 @@
 
 Architecture of system -
 
-
-[text](Architecture.md)
+[Go to architecture file](Architecture.md)
