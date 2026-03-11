@@ -29,11 +29,11 @@ uv add gradio
 uv add --dev pytest pytest-asyncio respx ruff
 
 News Data API :
-[text](https://newsdata.io/search-dashboard)
+(https://newsdata.io/search-dashboard)
 
 Openweather Map API :
-[text](https://home.openweathermap.org/api_keys)
+(https://home.openweathermap.org/api_keys)
 
 LLM :
-[text](https://console.groq.com/keys)
+(https://console.groq.com/keys)
 
