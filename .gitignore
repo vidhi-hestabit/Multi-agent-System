@@ -1,3 +1,5 @@
 /.env.local
 /.venv
 .env
+__pycache__/
+test_news.py
