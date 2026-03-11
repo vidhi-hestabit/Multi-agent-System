@@ -1,29 +1,39 @@
 # Multi-agent System
 
 
-Architecture of system -
+## Architecture of system -
 
 [Go to architecture file](Architecture.md)
 
 ## Dependencies for the system :
 
-#### Core framework
+#### Core framework-
 uv add fastapi "uvicorn[standard]" httpx pydantic pydantic-settings python-dotenv
 
-#### LLM
+#### LLM-
 uv add groq
 
-#### MCP
+#### MCP-
 uv add mcp
 
-#### Utilities
+#### Utilities-
 uv add tenacity structlog python-dateutil anyio
 
-#### Email
+#### Email-
 uv add aiosmtplib
 
-#### UI
+#### UI-
 uv add gradio
 
-#### Dev / test tools
+#### Dev / test tools-
 uv add --dev pytest pytest-asyncio respx ruff
+
+News Data API :
+[text](https://newsdata.io/search-dashboard)
+
+Openweather Map API :
+[text](https://home.openweathermap.org/api_keys)
+
+LLM :
+[text](https://console.groq.com/keys)
+
