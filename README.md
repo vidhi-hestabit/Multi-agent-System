@@ -5,6 +5,13 @@
 
 [Go to architecture file](Architecture.md)
 
+## To perform local setup :
+
+Run : 
+uv sync --dev
+source .venv/bin/activate
+
+
 ## Dependencies for the system :
 
 #### Core framework-
