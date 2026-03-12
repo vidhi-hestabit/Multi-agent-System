@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     news_api_key: str
     openweather_api_key: str
 
+    #Composio
+    composio_api_key:str
+    
     # Email
     smtp_host: str
     smtp_port: int
