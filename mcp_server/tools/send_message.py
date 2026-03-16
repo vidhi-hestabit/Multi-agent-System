@@ -1,8 +1,4 @@
 from __future__ import annotations
-import asyncio
-from functools import partial
-from composio import ComposioToolSet
-from common.config import get_settings
 from common.errors import MCPError
 from mcp_server.tools import composio_tool
 
@@ -54,39 +50,35 @@ APP_ACTION: dict[str, str] = {
     "DISCORD": "DISCORD_SEND_MESSAGE",
 }
 
-def _send_sync(api_key: str,app_slug: str,user_id: str,to: str,body: str,subject: str) -> dict:
-    action_name = APP_ACTION.get(app_slug)
-    if not action_name:
+async def handle( app: str, user_id: str, to: str, body: str, subject: str = "") -> dict:
+    app_slug = app.upper()
+    action = APP_ACTION.get(app_slug)
+    if not action:
         raise MCPError(
-            f"Sending via {app_slug} is not supported yet. "
-            f"Supported: {list[str](APP_ACTION.keys())}",
+            f"{app_slug} is not supported. Supported apps: {list(APP_ACTION.keys())}",
             tool=TOOL_NAME,
         )
-
-    toolset = ComposioToolSet(api_key=api_key, entity_id=user_id)
 
     if app_slug == "GMAIL":
         params = {
             "recipient_email": to,
-            "subject": subject or "Message from your AI Agent",
-            "body": body
+            "subject": subject or "Message from AI Agent",
+            "body": body,
         }
     elif app_slug == "SLACK":
-        params = {"channel": to, "text": body}
+        params = { "channel": to, "text": body }
     elif app_slug == "TELEGRAM":
-        params = {"chat_id": to, "text": body}
+        params = { "chat_id": to, "text": body }
+
     elif app_slug == "DISCORD":
-        params = {"channel_id": to, "content": body}
+        params = { "channel_id": to, "content": body}
+
     else:
-        params = {"to": to, "body": body}
+        raise MCPError(f"Unsupported app {app_slug}", tool=TOOL_NAME)
 
-    response = toolset.execute_action(
-        action=action_name,
-        params=params,
-        entity_id=user_id
-    )
+    result = await composio_tool.handle( action=action, user_id=user_id, params=params )
 
-    if response.get("successfull") or response.get("success"):
+    if result.get("success"):
         return {
             "success": True,
             "app": app_slug,
@@ -94,23 +86,4 @@ def _send_sync(api_key: str,app_slug: str,user_id: str,to: str,body: str,subject
             "message": f"Message sent via {app_slug} to {to}.",
         }
 
-    error_detail = response.get("error") or str(response)
-    raise MCPError(f"Composio action {action_name} failed: {error_detail}", tool=TOOL_NAME)
-
-
-async def handle(app: str,user_id: str,to: str,body: str,subject: str = "") -> dict:
-    settings = get_settings()
-    if not settings.composio_api_key:
-        raise MCPError("COMPOSIO_API_KEY is not set in .env.", tool=TOOL_NAME)
-
-    app_slug = app.upper()
-    loop = asyncio.get_event_loop()
-    try:
-        return await loop.run_in_executor(
-            None,
-            partial(_send_sync, settings.composio_api_key, app_slug, user_id, to, body, subject),
-        )
-    except MCPError:
-        raise
-    except Exception as e:
-        raise MCPError(f"Failed to send via {app_slug}: {e}", tool=TOOL_NAME)
+    raise MCPError(f"Failed sending message via {app_slug}", tool=TOOL_NAME )
