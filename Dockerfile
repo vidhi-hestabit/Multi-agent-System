@@ -11,6 +11,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY common/ ./common/
 COPY mcp_server/ ./mcp_server/
+COPY agents/ ./agents/
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
@@ -19,4 +20,3 @@ ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 
 CMD ["uv", "run", "python", "-m", "mcp_server.main"]
-

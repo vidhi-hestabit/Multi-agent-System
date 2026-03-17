@@ -15,9 +15,25 @@ services:
     <<: *common
     command: python -m mcp_server.main
     ports:
-      - "8000:8000"
+      - "8004:8000"
     environment:
       MCP_SERVER_PORT: "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Weather Agent
+  weather-agent:
+    <<: *common
+    command: python -m agents.weather_agent.main
+    ports:
+      - "8002:8000"
+    environment:
+      WEATHER_AGENT_PORT: "8000"
+    depends_on:
+      - mcp-server
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 15s
