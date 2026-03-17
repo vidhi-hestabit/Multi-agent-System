@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     report_agent_port: int
     orchestrator_port: int
     ui_port: int
+    sql_agent_port: int 
+    # rag_agent_port: int 
+    # chatbot_port: int 
+    
 
     # Hosts
     mcp_server_host: str
@@ -40,6 +44,13 @@ class Settings(BaseSettings):
     weather_agent_host: str
     report_agent_host: str
     orchestrator_host: str
+    sql_agent_host: str
+    # rag_agent_host: str
+    # chatbot_host: str 
+    chinook_db_path: str 
+    # faiss_index_path: str 
+    # faiss_chunks_path: str 
+
 
     # System
     mcp_transport: str
@@ -70,6 +81,17 @@ class Settings(BaseSettings):
     @property
     def orchestrator_url(self) -> str:
         return f"http://{self.orchestrator_host}:{self.orchestrator_port}"
+    @property
+    def sql_agent_url(self) -> str:
+        return f"http://{self.sql_agent_host}:{self.sql_agent_port}"
+
+    # @property
+    # def rag_agent_url(self) -> str:
+    #     return f"http://{self.rag_agent_host}:{self.rag_agent_port}"
+
+    # @property
+    # def chatbot_url(self) -> str:
+    #     return f"http://{self.chatbot_host}:{self.chatbot_port}"
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
