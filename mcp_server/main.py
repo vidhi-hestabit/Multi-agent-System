@@ -11,7 +11,7 @@ from mcp_server.tools import (
     composio_tool,
     send_message,
     query_sql,
-    # query_rag,
+    query_rag,
 )
 
 
@@ -66,13 +66,13 @@ def build_registry() -> ToolRegistry:
         tags=["sql", "database", "chinook"],
     ))
 
-    # registry.register(ToolDefinition(
-    #     name=query_rag.TOOL_NAME,
-    #     description=query_rag.TOOL_DESCRIPTION,
-    #     input_schema=query_rag.TOOL_SCHEMA,
-    #     handler=query_rag.handle,
-    #     tags=["rag", "law", "india", "search"],
-    # ))
+    registry.register(ToolDefinition(
+        name=query_rag.TOOL_NAME,
+        description=query_rag.TOOL_DESCRIPTION,
+        input_schema=query_rag.TOOL_SCHEMA,
+        handler=query_rag.handle,
+        tags=["rag", "law", "india", "search"],
+    ))
 
     return registry
 

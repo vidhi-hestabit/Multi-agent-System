@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     orchestrator_port: int
     ui_port: int
     sql_agent_port: int 
-    # rag_agent_port: int 
+    rag_agent_port: int 
     # chatbot_port: int 
     
 
@@ -45,11 +45,11 @@ class Settings(BaseSettings):
     report_agent_host: str
     orchestrator_host: str
     sql_agent_host: str
-    # rag_agent_host: str
+    rag_agent_host: str
     # chatbot_host: str 
     chinook_db_path: str 
-    # faiss_index_path: str 
-    # faiss_chunks_path: str 
+    faiss_index_path: str 
+    faiss_chunks_path: str 
 
 
     # System
@@ -85,9 +85,9 @@ class Settings(BaseSettings):
     def sql_agent_url(self) -> str:
         return f"http://{self.sql_agent_host}:{self.sql_agent_port}"
 
-    # @property
-    # def rag_agent_url(self) -> str:
-    #     return f"http://{self.rag_agent_host}:{self.rag_agent_port}"
+    @property
+    def rag_agent_url(self) -> str:
+        return f"http://{self.rag_agent_host}:{self.rag_agent_port}"
 
     # @property
     # def chatbot_url(self) -> str:
