@@ -10,17 +10,13 @@ from agents.base_agent.base_a2a_client import BaseA2AClient
 
 logger = get_logger(__name__)
 
-SYSTEM_PROMPT = """You are a Weather Agent. Your job is to:
-1. Interpret the user's weather query (city, conditions they want to know)
-2. Present weather data in a clear, friendly way
-3. Include temperature, humidity, wind speed, and general conditions
-4. Use natural language, avoid raw data dumps
-
-Mention if data is placeholder when applicable.
+SYSTEM_PROMPT = """You are a Weather Agent.
+Present weather data clearly and naturally.
+Do not invent failures if valid weather data is provided.
+If weather data is unavailable, say that live weather could not be fetched.
 """
 
 class WeatherAgentHandler(BaseHandler):
-
     def __init__(self):
         self.settings = get_settings()
         self.mcp = BaseMCPClient()
@@ -43,7 +39,6 @@ class WeatherAgentHandler(BaseHandler):
         self.add_edge("enrich_with_news", "summarize")
         self.finish("summarize")
 
-    #  Helpers 
     def _normalize_city(self, city: str) -> str:
         return city.lower().strip()
 
@@ -53,9 +48,11 @@ class WeatherAgentHandler(BaseHandler):
         return "yes" if any(k in msg for k in keywords) else "no"
 
     def _extract_city(self, query: str) -> str:
+        query = query.strip()
+
         patterns = [
-            r"weather (?:in|for|at)\s+([A-Za-z\s]+)",
-            r"(?:temperature|forecast|conditions?) (?:in|for|at)\s+([A-Za-z\s]+)",
+            r"weather (?:in|for|at|of)\s+([A-Za-z\s]+)",
+            r"(?:temperature|forecast|conditions?) (?:in|for|at|of)\s+([A-Za-z\s]+)",
             r"(?:is it|what(?:'s| is) it like) (?:in|at)\s+([A-Za-z\s]+)",
             r"([A-Za-z\s]+?) weather",
         ]
@@ -67,24 +64,53 @@ class WeatherAgentHandler(BaseHandler):
                 if city:
                     return city
 
-        words = [w for w in query.split() if w and w[0].isupper()]
-        return " ".join(words) if words else "London"
+        cleaned = re.sub(r"[^A-Za-z\s]", " ", query).strip()
+        words = cleaned.split()
+        if words:
+            return words[-1]
 
-    #  Nodes 
+        return ""
+
     async def _fetch_weather(self, state: AgentState) -> AgentState:
         query = state["message"]
         city_raw = self._extract_city(query)
         city = self._normalize_city(city_raw)
 
         state.setdefault("metadata", {})["city"] = city
-        try:
-            weather_data = await asyncio.wait_for( self.mcp.call_tool("fetch_weather", {"city": city, "units": "metric"}),
-                timeout=10)
-        except Exception:
-            logger.exception("weather_fetch_failed")
 
+        try:
+            weather_data = await asyncio.wait_for(
+                self.mcp.call_tool("fetch_weather", {"city": city, "units": "metric"}),
+                timeout=10,
+            )
+
+            logger.info("raw_weather_response", weather_data=weather_data)
+
+            if isinstance(weather_data, dict):
+                if "data" in weather_data and isinstance(weather_data["data"], dict):
+                    weather_data = weather_data["data"]
+                elif "result" in weather_data and isinstance(weather_data["result"], dict):
+                    weather_data = weather_data["result"]
+
+            if not isinstance(weather_data, dict):
+                raise ValueError(f"Unexpected weather response type: {type(weather_data)}")
+
+            expected_keys = {"temperature", "humidity", "wind_speed", "description"}
+            if not any(k in weather_data for k in expected_keys):
+                raise ValueError(f"Weather response missing expected keys: {weather_data}")
+
+            weather_data.setdefault("city", city.title())
+            weather_data.setdefault("country", "")
+            weather_data.setdefault("feels_like", weather_data.get("temperature"))
+            weather_data.setdefault("humidity", 0)
+            weather_data.setdefault("wind_speed", 0)
+            weather_data.setdefault("description", "Unknown")
+            weather_data["_mock"] = False
+
+        except Exception as e:
+            logger.exception("weather_fetch_failed", error=str(e))
             weather_data = {
-                "city": city,
+                "city": city.title(),
                 "country": "Unknown",
                 "temperature": 0,
                 "feels_like": 0,
@@ -94,6 +120,7 @@ class WeatherAgentHandler(BaseHandler):
                 "icon": "",
                 "_mock": True,
             }
+
         state["metadata"]["weather"] = weather_data
         state["metadata"]["is_mock"] = weather_data.get("_mock", False)
         return state
@@ -102,9 +129,11 @@ class WeatherAgentHandler(BaseHandler):
         if not self.settings.news_agent_url:
             state["metadata"]["news_context"] = ""
             return state
+
         city = state["metadata"].get("city", "")
         query = state["message"]
         news_query = f"weather news {city}" if city else query
+
         try:
             client = BaseA2AClient(self.settings.news_agent_url, timeout=30)
             response = await client.send_task(news_query)
@@ -113,10 +142,10 @@ class WeatherAgentHandler(BaseHandler):
                 news_text = response.status.message.text()
             state["metadata"]["news_context"] = news_text
             logger.info("weather_agent_fetched_news", chars=len(news_text))
-
         except Exception:
             logger.exception("weather_news_enrich_failed")
             state["metadata"]["news_context"] = ""
+
         return state
 
     async def _summarize(self, state: AgentState) -> AgentState:
@@ -124,42 +153,40 @@ class WeatherAgentHandler(BaseHandler):
         meta = state.get("metadata", {})
         weather_data = meta.get("weather", {})
         is_mock = meta.get("is_mock", False)
+
         unit = weather_data.get("unit_symbol", "C")
-        weather_summary = (
-            f"City: {weather_data.get('city')}, {weather_data.get('country')}\n"
-            f"Temperature: {weather_data.get('temperature')}°{unit}\n"
-            f"Feels like: {weather_data.get('feels_like')}°{unit}\n"
-            f"Humidity: {weather_data.get('humidity')}%\n"
-            f"Wind speed: {weather_data.get('wind_speed')} m/s\n"
-            f"Conditions: {weather_data.get('description')}"
-        )
+        city = weather_data.get("city", meta.get("city", "Unknown"))
+        country = weather_data.get("country", "")
+        temperature = weather_data.get("temperature", "N/A")
+        feels_like = weather_data.get("feels_like", "N/A")
+        humidity = weather_data.get("humidity", "N/A")
+        wind_speed = weather_data.get("wind_speed", "N/A")
+        description = weather_data.get("description", "Unknown")
+
         if is_mock:
-            weather_summary = ("[Note: Placeholder data. Configure API key for real data]\n\n" + weather_summary)
-        news_ctx = meta.get("news_context", "")
-        extra = f"\n\nRelated news:\n{news_ctx}" if news_ctx else ""
-
-        user_message = (
-            f"User query: {query}\n\n"
-            f"Weather data:\n{weather_summary}{extra}\n\n"
-            "Present this in a friendly, natural way."
-        )
-
-        try:
-            chat_response = await self.llm.chat.completions.create(
-                model=self.settings.groq_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ], max_tokens=512, temperature=0.3
+            summary = (
+                f"I couldn’t fetch live weather data for {city.title()} right now.\n\n"
+                f"Please check whether the weather API is configured correctly and whether "
+                f"the MCP tool is returning valid data."
             )
-            summary = chat_response.choices[0].message.content
+        else:
+            summary = (
+                f"Current weather in {city.title()}"
+                f"{', ' + country if country else ''}:\n"
+                f"- Temperature: {temperature}°{unit}\n"
+                f"- Feels like: {feels_like}°{unit}\n"
+                f"- Humidity: {humidity}%\n"
+                f"- Wind speed: {wind_speed} m/s\n"
+                f"- Conditions: {description}"
+            )
 
-        except Exception:
-            logger.exception("weather_llm_failed")
-            summary = f"Here's the latest weather update:\n\n{weather_summary}"
+        news_ctx = meta.get("news_context", "")
+        if news_ctx:
+            summary += f"\n\nRelated weather news:\n{news_ctx}"
 
         state["result"] = summary
         state["result_data"] = {
+            "query": query,
             "city": meta.get("city"),
             "weather": weather_data,
             "is_mock": is_mock,
