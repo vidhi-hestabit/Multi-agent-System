@@ -18,13 +18,7 @@ class Settings(BaseSettings):
 
     #Composio
     composio_api_key:str
-    
-    # Email
-    smtp_host: str
-    smtp_port: int
-    smtp_user: str
-    smtp_password: str
-    email_from: str
+    composio_base_url:str
 
     # Ports
     mcp_server_port: int
@@ -36,6 +30,7 @@ class Settings(BaseSettings):
     sql_agent_port: int 
     rag_agent_port: int 
     # chatbot_port: int 
+    composio_agent_port: int
     
 
     # Hosts
@@ -50,6 +45,11 @@ class Settings(BaseSettings):
     chinook_db_path: str 
     faiss_index_path: str 
     faiss_chunks_path: str 
+    composio_agent_host: str
+
+
+
+
 
 
     # System
@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     # @property
     # def chatbot_url(self) -> str:
     #     return f"http://{self.chatbot_host}:{self.chatbot_port}"
+    @property
+    def composio_agent_url(self) -> str:
+       return f"http://{self.composio_agent_host}:{self.composio_agent_port}"
+  
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
