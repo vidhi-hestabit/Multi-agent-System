@@ -11,9 +11,7 @@ from common.logging import get_logger
 logger = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
 # Topological sort
-# ---------------------------------------------------------------------------
 
 def topological_sort(plan: ExecutionPlan) -> list[list[str]]:
     """
@@ -42,9 +40,7 @@ def topological_sort(plan: ExecutionPlan) -> list[list[str]]:
     return steps
 
 
-# ---------------------------------------------------------------------------
 # Condition evaluator
-# ---------------------------------------------------------------------------
 
 def evaluate_condition(condition: str, results: dict[str, Any]) -> bool:
     """
@@ -85,12 +81,9 @@ def evaluate_condition(condition: str, results: dict[str, Any]) -> bool:
             condition=condition,
             error=str(exc),
         )
-        return True  # safe default — execute the node
+        return True 
 
-
-# ---------------------------------------------------------------------------
 # Plan executor
-# ---------------------------------------------------------------------------
 
 async def execute_plan(
     plan: ExecutionPlan,
@@ -111,20 +104,20 @@ async def execute_plan(
         for node in level:
             meta = plan.nodes[node]
 
-            # ---- Conditional skip ----
+            #  Conditional skip 
             if meta.condition:
                 if not evaluate_condition(meta.condition, results):
                     logger.info("node_skipped_condition", node=node, condition=meta.condition)
                     results[node] = None
                     continue
 
-            # ---- Cycle guard ----
+            #  Cycle guard 
             visited: list[str] = plan.metadata.setdefault("visited", [])
             if node in visited:
                 raise RuntimeError(f"Cycle guard triggered: '{node}' was already visited.")
             visited.append(node)
 
-            # ---- Depth / hop guard ----
+            #  Depth / hop guard 
             depth: int = plan.metadata.get("depth", 0)
             max_hops: int = plan.metadata.get("max_hops", 6)
             if depth >= max_hops:
@@ -133,7 +126,7 @@ async def execute_plan(
                 )
             plan.metadata["depth"] = depth + 1
 
-            # ---- Build enriched query ----
+            #  Build enriched query 
             # Collect upstream text outputs to pass as context
             upstream_texts: dict[str, str] = {}
             for dep in meta.input_from:
@@ -154,7 +147,7 @@ async def execute_plan(
             else:
                 query_text = initial_query
 
-            # ---- Schedule the A2A call ----
+            #  Schedule the A2A call 
             client = get_agent_client(node)
             coros[node] = client.send_task(
                 text=query_text,
@@ -165,7 +158,7 @@ async def execute_plan(
                 },
             )
 
-        # ---- Run level in parallel ----
+        #  Run level in parallel 
         if coros:
             level_results = await asyncio.gather(*coros.values(), return_exceptions=True)
             for name, result in zip(coros.keys(), level_results):
