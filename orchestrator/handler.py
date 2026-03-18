@@ -1,10 +1,7 @@
 from __future__ import annotations
-
 import json
 from typing import Any
-
 from groq import AsyncGroq
-
 from agents.base_agent.base_handler import BaseHandler, AgentState
 from common.config import get_settings
 from common.execute_plan import ExecutionPlan
@@ -13,20 +10,18 @@ from orchestrator.executor import execute_plan
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Planner prompt
-# ---------------------------------------------------------------------------
 
 PLANNER_SYSTEM_PROMPT = """You are an orchestration planner for a multi-agent system.
 
 Available agents:
-- sql_agent     — answers natural language questions about the Chinook music database
-- rag_agent     — answers Indian law questions using semantic search
-- news_agent    — fetches and summarises news articles on any topic
-- weather_agent — fetches current weather conditions for a city
-- report_agent  — compiles outputs from other agents into a structured report
+- sql_agent       — answers natural language questions about the Chinook music database
+- rag_agent       — answers Indian law questions using semantic search
+- news_agent      — fetches and summarises news articles on any topic
+- weather_agent   — fetches current weather conditions for a city
+- composio_agent  — sends or delivers content via connected apps such as Gmail, Slack, Telegram, Discord, etc.
 
-Given a user query, return ONLY a valid JSON ExecutionPlan with this exact structure (no markdown, no explanation):
+You will receive a refined task object in JSON.
+Return ONLY a valid JSON ExecutionPlan with this exact structure (no markdown, no explanation):
 
 {
   "nodes": {
@@ -41,42 +36,91 @@ Given a user query, return ONLY a valid JSON ExecutionPlan with this exact struc
 }
 
 Rules:
-1. Only include agents actually needed for this query.
-2. No cycles — dependencies must always point forward (downstream).
-3. "entry_points" must list every node whose "depends_on" is empty [].
-4. "report_agent" must depend on ALL data-gathering agents when a report/email/summary is needed.
-5. "input_from" should list agents whose text output should be forwarded to this agent.
-6. Use "condition" (a Python expression string) ONLY when the next step depends on a runtime value,
-   e.g. "weather_agent.temperature > 35". Set to null otherwise.
-7. Keep plans minimal — use the fewest agents that satisfy the query.
-8. If the query is entirely self-contained for one agent, return a single-node plan.
+1. Only include agents actually needed.
+2. No cycles.
+3. "entry_points" must include every node whose "depends_on" is [].
+4. Use composio_agent whenever the user asks to send, email, mail, message, post, share, or deliver output through Gmail, Slack, Telegram, Discord, or another connected app/channel.
+5. If composio_agent is used after multiple upstream agents, it must depend on all required upstream agents.
+6. If only one agent's output needs to be sent directly, composio_agent may depend directly on that single agent.
+7. "input_from" must list the agents whose text output should be forwarded to that node.
+8. Use "condition" only for runtime branching. Otherwise set it to null.
+9. Keep plans minimal.
+10. If a refined task already includes "requires_agents", do not add unrelated agents.
 
 Examples:
 
-Query: "Get AI news"
+Input:
 {
-  "nodes": {"news_agent": {"depends_on": [], "condition": null, "input_from": []}},
+  "refined_query": "Fetch the latest AI news.",
+  "intent": "single_agent",
+  "requires_agents": ["news_agent"],
+  "delivery_target": {"needed": false, "platform": null, "recipient_or_channel": null},
+  "notes": "Single retrieval task for news_agent."
+}
+
+Output:
+{
+  "nodes": {
+    "news_agent": {"depends_on": [], "condition": null, "input_from": []}
+  },
   "entry_points": ["news_agent"],
   "metadata": {"visited": [], "depth": 0, "max_hops": 6}
 }
 
-Query: "Email a summary of today's weather and top news"
+Input:
+{
+  "refined_query": "Fetch the latest AI news and send it via Gmail.",
+  "intent": "multi_agent_with_delivery",
+  "requires_agents": ["news_agent", "composio_agent"],
+  "delivery_target": {"needed": true, "platform": "gmail", "recipient_or_channel": null},
+  "notes": "News must be fetched first, then delivered through composio_agent."
+}
+
+Output:
+{
+  "nodes": {
+    "news_agent": {"depends_on": [], "condition": null, "input_from": []},
+    "composio_agent": {"depends_on": ["news_agent"], "condition": null, "input_from": ["news_agent"]}
+  },
+  "entry_points": ["news_agent"],
+  "metadata": {"visited": [], "depth": 0, "max_hops": 6}
+}
+
+Input:
+{
+  "refined_query": "Fetch the current weather in Delhi and top AI news, then send both to Slack.",
+  "intent": "multi_agent_with_delivery",
+  "requires_agents": ["weather_agent", "news_agent", "composio_agent"],
+  "delivery_target": {"needed": true, "platform": "slack", "recipient_or_channel": null},
+  "notes": "Multiple agent outputs must be combined before delivery."
+}
+
+Output:
 {
   "nodes": {
     "weather_agent": {"depends_on": [], "condition": null, "input_from": []},
-    "news_agent":    {"depends_on": [], "condition": null, "input_from": []},
-    "report_agent":  {"depends_on": ["weather_agent", "news_agent"], "condition": null, "input_from": ["weather_agent", "news_agent"]}
+    "news_agent": {"depends_on": [], "condition": null, "input_from": []},
+    "composio_agent": {"depends_on": ["weather_agent", "news_agent"], "condition": null, "input_from": ["weather_agent", "news_agent"]}
   },
   "entry_points": ["weather_agent", "news_agent"],
   "metadata": {"visited": [], "depth": 0, "max_hops": 6}
 }
 
-Query: "Check weather in Delhi; if it's hot get heatwave news, then email a report"
+Input:
+{
+  "refined_query": "Check weather in Delhi. If it is hot, fetch heatwave news and email the result.",
+  "intent": "multi_agent_with_delivery",
+  "requires_agents": ["weather_agent", "news_agent", "composio_agent"],
+  "delivery_target": {"needed": true, "platform": "gmail", "recipient_or_channel": null},
+  "notes": "Conditional branching based on weather result."
+}
+
+Output:
 {
   "nodes": {
     "weather_agent": {"depends_on": [], "condition": null, "input_from": []},
-    "news_agent":    {"depends_on": ["weather_agent"], "condition": "weather_agent.temperature > 35", "input_from": ["weather_agent"]},
-    "report_agent":  {"depends_on": ["news_agent"], "condition": null, "input_from": ["weather_agent", "news_agent"]}
+    "news_agent": {"depends_on": ["weather_agent"], "condition": "weather_agent.temperature > 35", "input_from": ["weather_agent"]},
+    "composio_agent": {"depends_on": ["weather_agent", "news_agent"], "condition": null, "input_from": ["weather_agent", "news_agent"]}
   },
   "entry_points": ["weather_agent"],
   "metadata": {"visited": [], "depth": 0, "max_hops": 6}
@@ -84,15 +128,82 @@ Query: "Check weather in Delhi; if it's hot get heatwave news, then email a repo
 """
 
 
-# ---------------------------------------------------------------------------
-# Handler
-# ---------------------------------------------------------------------------
+REFINER_SYSTEM_PROMPT = """You are a query refiner and router for a multi-agent orchestration system.
+
+Your job:
+1. Rewrite the user's request into a clear, explicit internal task.
+2. Detect whether the task involves:
+   - data retrieval
+   - delivery/sending via Gmail, Slack, Telegram, Discord, or another connected app
+3. Identify which agent capabilities are likely required.
+
+Available agents:
+- sql_agent
+- rag_agent
+- news_agent
+- weather_agent
+- composio_agent
+
+Return ONLY valid JSON with this exact structure:
+
+{
+  "refined_query": "<clear rewritten task>",
+  "intent": "<one of: direct_answer, single_agent, multi_agent, multi_agent_with_delivery>",
+  "requires_agents": ["<agent_name>"],
+  "delivery_target": {
+    "needed": true,
+    "platform": "<gmail|slack|telegram|discord|unknown|null>",
+    "recipient_or_channel": "<recipient if explicitly mentioned, else null>"
+  },
+  "notes": "<short reasoning summary>"
+}
+
+Rules:
+1. Preserve the user's original meaning.
+2. If the user asks to send, email, mail, post, message, share, or deliver content, include composio_agent in requires_agents.
+3. If the delivery platform is mentioned as Gmail, email, Slack, channel, Telegram, Discord, identify it in delivery_target.platform.
+4. If recipient/channel is not specified, set it to null.
+5. Keep the refined_query concrete and execution-ready.
+6. If the task clearly needs multiple retrieval agents, include all of them in requires_agents.
+7. If the user asks for "channel", "Slack", "mail", "gmail", "email", "send", or "post", treat it as delivery-related.
+
+Examples:
+
+User: "latest AI news"
+{
+  "refined_query": "Fetch the latest AI news.",
+  "intent": "single_agent",
+  "requires_agents": ["news_agent"],
+  "delivery_target": {"needed": false, "platform": null, "recipient_or_channel": null},
+  "notes": "Single retrieval task for news_agent."
+}
+
+User: "send latest AI news to gmail"
+{
+  "refined_query": "Fetch the latest AI news and send it via Gmail.",
+  "intent": "multi_agent_with_delivery",
+  "requires_agents": ["news_agent", "composio_agent"],
+  "delivery_target": {"needed": true, "platform": "gmail", "recipient_or_channel": null},
+  "notes": "News must be fetched first, then delivered through composio_agent."
+}
+
+User: "weather in Delhi and top news, send it to slack channel"
+{
+  "refined_query": "Fetch the current weather in Delhi and top news, then send both to Slack.",
+  "intent": "multi_agent_with_delivery",
+  "requires_agents": ["weather_agent", "news_agent", "composio_agent"],
+  "delivery_target": {"needed": true, "platform": "slack", "recipient_or_channel": null},
+  "notes": "Multiple agent outputs are required before delivery."
+}
+"""
+
 
 class OrchestratorHandler(BaseHandler):
     """
     LangGraph-based orchestrator handler.
 
-    Graph:  plan → execute → format_result
+    Graph:
+        refine -> plan -> execute -> format_result
     """
 
     def __init__(self) -> None:
@@ -100,26 +211,31 @@ class OrchestratorHandler(BaseHandler):
         self.llm = AsyncGroq(api_key=self.settings.groq_api_key)
         super().__init__()
 
-    # ------------------------------------------------------------------
-    # LangGraph graph definition
-    # ------------------------------------------------------------------
-
     def _build_graph(self) -> None:
+        self.add_node("refine", self._refine)
         self.add_node("plan", self._plan)
         self.add_node("execute", self._execute)
         self.add_node("format_result", self._format_result)
 
-        self.set_entry("plan")
+        self.set_entry("refine")
+        self.add_edge("refine", "plan")
         self.add_edge("plan", "execute")
         self.add_edge("execute", "format_result")
         self.finish("format_result")
 
-    # ------------------------------------------------------------------
-    # Nodes
-    # ------------------------------------------------------------------
+    @staticmethod
+    def _strip_code_fences(raw: str) -> str:
+        raw = raw.strip()
+        if raw.startswith("```"):
+            lines = raw.splitlines()
+            raw = "\n".join(
+                line for line in lines
+                if not line.strip().startswith("```")
+            ).strip()
+        return raw
 
-    async def _plan(self, state: AgentState) -> AgentState:
-        """Call the LLM planner and build an ExecutionPlan."""
+    async def _refine(self, state: AgentState) -> AgentState:
+        """Refine the raw user query into a structured task."""
         query = state["message"]
         state.setdefault("metadata", {})
 
@@ -127,23 +243,63 @@ class OrchestratorHandler(BaseHandler):
             resp = await self.llm.chat.completions.create(
                 model=self.settings.groq_model,
                 messages=[
-                    {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+                    {"role": "system", "content": REFINER_SYSTEM_PROMPT},
                     {"role": "user", "content": query},
+                ],
+                max_tokens=800,
+                temperature=0.1,
+            )
+
+            raw = resp.choices[0].message.content or ""
+            raw = self._strip_code_fences(raw)
+
+            refined: dict[str, Any] = json.loads(raw)
+
+            state["metadata"]["refined_task"] = refined
+            logger.info(
+                "orchestrator_refine_ready",
+                refined_query=refined.get("refined_query"),
+                intent=refined.get("intent"),
+                requires_agents=refined.get("requires_agents", []),
+            )
+
+        except json.JSONDecodeError as exc:
+            logger.error("orchestrator_refine_json_error", error=str(exc))
+            state["error"] = f"Refiner returned invalid JSON: {exc}"
+
+        except Exception as exc:
+            logger.error("orchestrator_refine_failed", error=str(exc))
+            state["error"] = f"Refinement failed: {exc}"
+
+        return state
+
+    async def _plan(self, state: AgentState) -> AgentState:
+        """Call the planner and build an ExecutionPlan from the refined task."""
+        if state.get("error"):
+            return state
+
+        state.setdefault("metadata", {})
+        refined_task = state.get("metadata", {}).get("refined_task")
+
+        if not refined_task:
+            state["error"] = "No refined task was created."
+            return state
+
+        try:
+            planner_input = json.dumps(refined_task, ensure_ascii=False)
+
+            resp = await self.llm.chat.completions.create(
+                model=self.settings.groq_model,
+                messages=[
+                    {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
+                    {"role": "user", "content": planner_input},
                 ],
                 max_tokens=1024,
                 temperature=0.1,
             )
 
-            raw = resp.choices[0].message.content.strip()
-
-            # Strip markdown code fences if the LLM wraps its output
-            if raw.startswith("```"):
-                lines = raw.splitlines()
-                # Remove opening fence (```json or ```) and closing fence
-                raw = "\n".join(
-                    line for line in lines
-                    if not line.strip().startswith("```")
-                )
+            raw = resp.choices[0].message.content or ""
+            raw = self._strip_code_fences(raw)
 
             plan_dict: dict[str, Any] = json.loads(raw)
             plan = ExecutionPlan(**plan_dict)
@@ -170,20 +326,29 @@ class OrchestratorHandler(BaseHandler):
         if state.get("error"):
             return state
 
-        plan_dict = state.get("metadata", {}).get("execution_plan")
+        metadata = state.get("metadata", {})
+        plan_dict = metadata.get("execution_plan")
+        refined_task = metadata.get("refined_task", {})
+
         if not plan_dict:
             state["error"] = "No execution plan was created."
             return state
 
+        execution_query = refined_task.get("refined_query", state["message"])
+
         try:
             plan = ExecutionPlan(**plan_dict)
-            raw_results = await execute_plan(plan, state["message"])
+            raw_results = await execute_plan(plan, execution_query)
 
-            # Serialise results so they can be stored in state metadata
-            serialised: dict[str, dict] = {}
+            serialised: dict[str, dict[str, Any]] = {}
+
             for agent_name, result in raw_results.items():
                 if result is None:
-                    serialised[agent_name] = {"skipped": True, "text": "", "state": "skipped"}
+                    serialised[agent_name] = {
+                        "skipped": True,
+                        "text": "",
+                        "state": "skipped",
+                    }
                 elif isinstance(result, Exception):
                     serialised[agent_name] = {
                         "error": str(result),
@@ -191,14 +356,23 @@ class OrchestratorHandler(BaseHandler):
                         "state": "failed",
                     }
                 else:
-                    text = (
-                        result.status.message.text()
-                        if result.status.message
-                        else ""
-                    )
+                    text = ""
+                    if getattr(result, "status", None) and getattr(result.status, "message", None):
+                        try:
+                            text = result.status.message.text()
+                        except Exception:
+                            text = str(result.status.message)
+
+                    state_value = "unknown"
+                    if getattr(result, "status", None) and getattr(result.status, "state", None):
+                        try:
+                            state_value = result.status.state.value
+                        except Exception:
+                            state_value = str(result.status.state)
+
                     serialised[agent_name] = {
                         "text": text,
-                        "state": result.status.state.value,
+                        "state": state_value,
                     }
 
             state["metadata"]["agent_results"] = serialised
@@ -216,23 +390,32 @@ class OrchestratorHandler(BaseHandler):
     async def _format_result(self, state: AgentState) -> AgentState:
         """Merge all agent outputs into a single human-readable result."""
         if state.get("error"):
+            state["result"] = state["error"]
+            state["result_data"] = {
+                "error": state["error"],
+                "execution_plan": state.get("metadata", {}).get("execution_plan", {}),
+                "refined_task": state.get("metadata", {}).get("refined_task", {}),
+            }
             return state
 
-        agent_results: dict[str, dict] = state.get("metadata", {}).get(
-            "agent_results", {}
-        )
+        metadata = state.get("metadata", {})
+        agent_results: dict[str, dict[str, Any]] = metadata.get("agent_results", {})
 
         sections: list[str] = []
+
         for agent_name, result in agent_results.items():
             if result.get("skipped"):
                 continue
+
+            label = agent_name.replace("_", " ").title()
+
             if result.get("error"):
-                sections.append(f" **{agent_name}** encountered an error: {result['error']}")
-            else:
-                text = result.get("text", "").strip()
-                if text:
-                    label = agent_name.replace("_", " ").title()
-                    sections.append(f"### {label}\n\n{text}")
+                sections.append(f"### {label}\n\nError: {result['error']}")
+                continue
+
+            text = (result.get("text") or "").strip()
+            if text:
+                sections.append(f"### {label}\n\n{text}")
 
         combined = (
             "\n\n---\n\n".join(sections)
@@ -242,7 +425,8 @@ class OrchestratorHandler(BaseHandler):
 
         state["result"] = combined
         state["result_data"] = {
+            "refined_task": metadata.get("refined_task", {}),
+            "execution_plan": metadata.get("execution_plan", {}),
             "agent_results": agent_results,
-            "execution_plan": state.get("metadata", {}).get("execution_plan", {}),
         }
         return state
