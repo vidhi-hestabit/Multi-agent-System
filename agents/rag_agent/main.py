@@ -21,6 +21,7 @@ def main():
         version="1.0.0",
         capabilities=AgentCapabilities(streaming=False),
         skills=SKILLS
+
     )
 
     handler = RAGAgentHandler()
@@ -29,7 +30,6 @@ def main():
     logger.info("rag_agent_starting", port=settings.rag_agent_port)
 
     uvicorn.run(app, host="0.0.0.0", port=settings.rag_agent_port, log_config=None)
-
 
 if __name__ == "__main__":
     main()

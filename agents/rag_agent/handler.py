@@ -12,6 +12,7 @@ SYSTEM_PROMPT = """You are an Indian Law Expert Agent. You are given relevant ex
 Use ONLY the provided context to answer the question. Be precise and cite the relevant law or section when possible.
 If the context does not contain enough information, say so clearly."""
 
+
 class RAGAgentHandler(BaseHandler):
     def __init__(self):
         self.settings = get_settings()
@@ -40,16 +41,19 @@ class RAGAgentHandler(BaseHandler):
     async def _answer(self, state: AgentState) -> AgentState:
         query = state["message"]
         chunks = state.get("metadata", {}).get("chunks", [])
+
         if not chunks:
             state["result"] = "No relevant legal information found for your query."
             state["result_data"] = {"chunks": [], "total": 0}
             return state
+
         context = " ".join(chunks)
         user_content = (
             f"Legal question: {query}"
             f"Relevant legal excerpts:{context}"
             "Answer the question based on the excerpts above."
         )
+
         try:
             resp = await self.llm.chat.completions.create(
                 model=self.settings.groq_model,
