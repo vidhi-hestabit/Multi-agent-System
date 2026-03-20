@@ -1,89 +1,88 @@
 from __future__ import annotations
 import json
-import asyncio
-from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 from common.logging import get_logger
-from common.errors import MCPError
-from mcp_server.tool_registry import ToolRegistry
+from mcp_server.app import mcp
 
 logger = get_logger(__name__)
 
-class ToolCallRequest(BaseModel):
-    tool: str
-    arguments: dict = {}
+_routes_registered = False
 
-def create_app(registry: ToolRegistry) -> FastAPI:
-    app = FastAPI(title="MCP Tool Server", version="1.0.0")
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+def create_app(transport: str = "sse"):
+    global _routes_registered
 
-    @app.get("/health")
-    async def health():
-        return {"status": "ok", "service": "mcp-server", "tools": registry.all_names()}
+    async def health(request: Request) -> JSONResponse:
+        return JSONResponse({"status": "ok", "service": "mcp-server"})
 
-    @app.get("/tools")
-    async def list_tools():
-        return {"tools": registry.list_tools()}
+    async def list_tools(request: Request) -> JSONResponse:
+        tools = await mcp.list_tools()
+        return JSONResponse({
+            "tools": [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "inputSchema": t.parameters,
+                }
+                for t in tools
+            ]
+        })
 
-    @app.post("/tools/call")
-    async def call_tool(request: ToolCallRequest):
-        definition = registry.get(request.tool)
-        if definition is None:
-            raise HTTPException(status_code=404, detail=f"Tool '{request.tool}' not found")
+    async def call_tool(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"code": "INVALID_JSON", "message": "Request body must be JSON"},
+                status_code=422,
+            )
+
+        tool_name = body.get("tool")
+        arguments  = body.get("arguments", {})
+
+        if not tool_name:
+            return JSONResponse(
+                {"code": "MISSING_TOOL", "message": "'tool' field is required"},
+                status_code=422,
+            )
 
         try:
-            logger.info("tool_call", tool=request.tool, arguments=request.arguments)
-            result = await definition.handler(**request.arguments)
-            # Serialize Pydantic models to dict for JSON response
-            if hasattr(result, "model_dump"):
-                result = result.model_dump(mode="json")
-            return {"tool": request.tool, "result": result}
-        except MCPError as e:
-            logger.error("tool_error", tool=request.tool, error=str(e))
-            raise HTTPException(status_code=422, detail=e.to_dict())
-        except TypeError as e:
-            raise HTTPException(
+            result = await mcp.call_tool(tool_name, arguments)
+        except Exception as exc:
+            logger.error("tool_call_failed", tool=tool_name, error=str(exc))
+            return JSONResponse(
+                {"code": "TOOL_ERROR", "message": str(exc)},
                 status_code=422,
-                detail={"code": "INVALID_ARGUMENTS", "message": str(e)},
             )
-        except Exception as e:
-            logger.exception("tool_unexpected_error", tool=request.tool)
-            raise HTTPException(status_code=500, detail={"code": "INTERNAL_ERROR", "message": str(e)})
 
-    @app.get("/sse")
-    async def sse_endpoint(request: Request):
-        async def event_generator() -> AsyncGenerator[str, None]:
-            tools_event = {
-                "type": "tools",
-                "tools": registry.list_tools(),
-            }
-            yield f"data: {json.dumps(tools_event)}\n\n"
-
-            while True:
-                if await request.is_disconnected():
+        # Prefer structured_content (already a dict/list), fall back to
+        # parsing the text content block (which may be a JSON string).
+        if result.structured_content is not None:
+            payload = result.structured_content
+        else:
+            payload = None
+            for block in result.content:
+                text = getattr(block, "text", None)
+                if text is not None:
+                    try:
+                        payload = json.loads(text)
+                    except (json.JSONDecodeError, TypeError):
+                        payload = text
                     break
-                await asyncio.sleep(15)
-                ping = {"type": "ping"}
-                yield f"data: {json.dumps(ping)}\n\n"
 
-        return StreamingResponse(
-            event_generator(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-                "Connection": "keep-alive",
-            },
-        )
-    return app
+        return JSONResponse({"tool": tool_name, "result": payload})
+
+    if not _routes_registered:
+        mcp._additional_http_routes.extend([
+            Route("/health",     endpoint=health,     methods=["GET"]),
+            Route("/tools",      endpoint=list_tools, methods=["GET"]),
+            Route("/tools/list", endpoint=list_tools, methods=["GET"]),
+            Route("/tools/call", endpoint=call_tool,  methods=["POST"]),
+        ])
+        _routes_registered = True
+
+    return mcp.http_app(transport=transport)

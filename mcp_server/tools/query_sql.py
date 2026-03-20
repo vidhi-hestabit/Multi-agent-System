@@ -4,6 +4,7 @@ import aiosqlite
 from groq import AsyncGroq
 from common.config import get_settings
 from common.logging import get_logger
+from mcp_server.app import mcp
 
 logger = get_logger(__name__)
 
@@ -19,8 +20,6 @@ TOOL_SCHEMA = {
     },
     "required": ["natural_language_query"],
 }
-
-# DB_PATH = os.environ.get("CHINOOK_DB_PATH", "/app/data/chinook.db")
 
 CHINOOK_SCHEMA = """
 Tables:
@@ -44,6 +43,7 @@ Schema:
 """
 
 
+@mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
 async def handle(natural_language_query: str) -> dict:
     settings = get_settings()
     db_path = getattr(settings, "chinook_db_path", None) or os.environ.get(
@@ -72,7 +72,7 @@ async def handle(natural_language_query: str) -> dict:
         return {"error": f"LLM failed: {exc}", "rows": [], "sql": ""}
 
     try:
-        async with aiosqlite.connect(settings.chinook_db_path) as db:
+        async with aiosqlite.connect(db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(sql) as cursor:
                 rows = await cursor.fetchall()

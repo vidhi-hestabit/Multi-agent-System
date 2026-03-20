@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any
 from common.errors import MCPError
 from common.models import Report, ReportSection
+from mcp_server.app import mcp
 
 TOOL_NAME = "generate_report"
 TOOL_DESCRIPTION = "Generate a structured markdown report from provided data sections."
@@ -32,6 +33,8 @@ TOOL_SCHEMA = {
     "required": ["title", "summary", "sections"],
 }
 
+
+@mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
 async def handle(
     title: str,
     summary: str,
@@ -40,20 +43,16 @@ async def handle(
 ) -> Report:
     if not title or not title.strip():
         raise MCPError("Report title cannot be empty", tool=TOOL_NAME)
-
     if not sections:
         raise MCPError("Report must have at least one section", tool=TOOL_NAME)
 
     metadata = metadata or {}
-
     report_sections = []
     for section in sections:
         heading = section.get("heading", "").strip()
         content = section.get("content", "").strip()
-
         if not heading:
             raise MCPError("Each section must have a heading", tool=TOOL_NAME)
-
         report_sections.append(ReportSection(heading=heading, content=content))
 
     return Report(

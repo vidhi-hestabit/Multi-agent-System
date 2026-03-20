@@ -4,6 +4,7 @@ import httpx
 from common.config import get_settings
 from common.errors import MCPError
 from common.models import NewsArticle
+from mcp_server.app import mcp
 
 TOOL_NAME = "fetch_news"
 TOOL_DESCRIPTION = "Fetch the latest news articles for a given topic or query."
@@ -31,51 +32,40 @@ TOOL_SCHEMA = {
 }
 
 
+@mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
 async def handle(query: str, language: str = "en", page_size: int = 5) -> list[NewsArticle]:
     settings = get_settings()
     api_key = settings.news_api_key
 
     if not api_key or api_key == "your_newsapi_key_here":
-        raise MCPError(
-            "NEWS_API_KEY is not configured in .env",
-            tool=TOOL_NAME,
-        )
+        raise MCPError("NEWS_API_KEY is not configured in .env", tool=TOOL_NAME)
 
     url = "https://newsdata.io/api/1/news"
     params = {
         "q": query,
         "language": language,
-        "size": page_size,       # NewsData.io uses "size" not "pageSize"
-        "apikey": api_key,       # NewsData.io uses "apikey" (all lowercase)
+        "size": page_size,
+        "apikey": api_key,
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
         try:
             response = await client.get(url, params=params)
-
             if response.status_code == 404:
-                raise MCPError(
-                    f"Query '{query}' returned no results",
-                    tool=TOOL_NAME,
-                )
-
+                raise MCPError(f"Query '{query}' returned no results", tool=TOOL_NAME)
             response.raise_for_status()
             data = response.json()
-
         except httpx.HTTPError as e:
-            raise MCPError(
-                f"HTTP error while fetching news: {str(e)}",
-                tool=TOOL_NAME,
-            )
+            raise MCPError(f"HTTP error while fetching news: {str(e)}", tool=TOOL_NAME)
 
-    if data.get("status") != "success":      # NewsData.io returns "success" not "ok"
+    if data.get("status") != "success":
         raise MCPError(
             f"NewsData.io error: {data.get('message', {}).get('message', 'Unknown error')}",
             tool=TOOL_NAME,
         )
 
     articles = []
-    for article in data.get("results", [])[:page_size]:   # slice to enforce page_size
+    for article in data.get("results", [])[:page_size]:
         articles.append(
             NewsArticle(
                 title=article.get("title", ""),

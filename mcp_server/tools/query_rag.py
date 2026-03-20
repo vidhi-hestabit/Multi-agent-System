@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 from common.config import get_settings
 from common.logging import get_logger
+from mcp_server.app import mcp
 
 logger = get_logger(__name__)
 
@@ -45,6 +46,7 @@ def _load_index():
         _chunks = []
 
 
+@mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
 async def handle(query: str, top_k: int = 5) -> dict:
     _load_index()
 

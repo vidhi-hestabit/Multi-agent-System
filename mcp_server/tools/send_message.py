@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from common.errors import MCPError
-from mcp_server.tools import composio_tool
+from mcp_server.app import mcp
+from mcp_server.tools.composio_tool import handle as composio_handle
 
 TOOL_NAME = "send_message"
 TOOL_DESCRIPTION = (
     "Send a message or email through a Composio-connected app. "
     "Supported apps: GMAIL, SLACK, TELEGRAM, DISCORD."
 )
-
 TOOL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -57,6 +57,7 @@ def _normalize_app(app: str) -> str:
     return app.strip().upper()
 
 
+@mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
 async def handle(
     app: str,
     user_id: str,
@@ -72,42 +73,21 @@ async def handle(
             f"{app_slug} is not supported. Supported apps: {list(APP_ACTION.keys())}",
             tool=TOOL_NAME,
         )
-
     if not to.strip():
         raise MCPError("Recipient/destination 'to' is required.", tool=TOOL_NAME)
-
     if not body.strip():
         raise MCPError("Message body is required.", tool=TOOL_NAME)
 
     if app_slug == "GMAIL":
-        params = {
-            "recipient_email": to,
-            "subject": subject or "Message from AI Agent",
-            "body": body,
-        }
+        params = {"recipient_email": to, "subject": subject or "Message from AI Agent", "body": body}
     elif app_slug == "SLACK":
-        params = {
-            "channel": to,
-            "text": body,
-        }
+        params = {"channel": to, "text": body}
     elif app_slug == "TELEGRAM":
-        params = {
-            "chat_id": to,
-            "text": body,
-        }
-    elif app_slug == "DISCORD":
-        params = {
-            "channel_id": to,
-            "content": body,
-        }
-    else:
-        raise MCPError(f"Unsupported app {app_slug}", tool=TOOL_NAME)
+        params = {"chat_id": to, "text": body}
+    else:  # DISCORD
+        params = {"channel_id": to, "content": body}
 
-    result = await composio_tool.handle(
-        action=action,
-        user_id=user_id,
-        params=params,
-    )
+    result = await composio_handle(action=action, user_id=user_id, params=params)
 
     if result.get("success"):
         return {
