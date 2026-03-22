@@ -1,40 +1,52 @@
-import uvicorn
-from common.config import get_settings
-from common.logging import setup_logging, get_logger
-from common.tracing import init_tracing
-from common.a2a_types import AgentCard, AgentCapabilities
-from agents.sql_agent.handler import SQLAgentHandler
-from agents.sql_agent.skills import SKILLS
-from agents.base_agent.base_a2a_server import create_agent_app
+from __future__ import annotations
+import logging, os, httpx, uvicorn
+from agents.base import BaseAgent
+
+logger = logging.getLogger(__name__)
+PORT   = int(os.environ.get("SQL_AGENT_PORT", 8005))
+HOST   = os.environ.get("SQL_AGENT_HOST", "localhost")
+MCP    = os.environ.get("MCP_SERVER_URL", "http://localhost:8000")
+
+class SQLAgent(BaseAgent):
+    @property
+    def agent_card(self) -> dict:
+        return {
+            "name": "SQL Agent",
+            "description": "Answers natural language questions about the Chinook music database.",
+            "url":             f"http://{HOST}:{PORT}",
+            "version":         "1.0.0",
+            "protocolVersion": "0.3.0",
+            "requires":        [],
+            "produces":        ["sql_answer"],
+            "capabilities":    {"streaming": False},
+            "skills": [{"id": "query_sql", "name": "Query SQL",
+                        "description": "Natural language → SQL → Chinook DB → answer.",
+                        "tags": ["sql", "database", "music"]}],
+        }
+
+    async def run(self, task_id: str, instruction: str, context: dict) -> dict:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(f"{MCP}/tools/call", json={
+                "tool": "query_sql",
+                "arguments": {"natural_language_query": instruction},
+            })
+            resp.raise_for_status()
+        result = resp.json().get("result", {})
+        if result.get("error"):
+            return {"sql_answer": f"Error: {result['error']}"}
+        rows = result.get("rows", [])
+        sql  = result.get("sql", "")
+        if not rows:
+            return {"sql_answer": f"No results found. SQL: {sql}"}
+
+        rows_text = "\n".join(str(r) for r in rows[:10])
+        answer    = f"SQL: {sql}\n\nResults ({len(rows)} rows):\n{rows_text}"
+        return {"sql_answer": answer}
 
 
-def main():
-    setup_logging()
-    logger = get_logger("sql_agent")
-    settings = get_settings()
-    init_tracing("sql-agent")
-
-    agent_card = AgentCard(
-        name="SQL Agent",
-        description="Answers natural language questions about the Chinook music database using SQL.",
-        url=f"http://{settings.sql_agent_host}:{settings.sql_agent_port}",
-        version="1.0.0",
-        capabilities=AgentCapabilities(streaming=False),
-        skills=SKILLS,
-    )
-
-    handler = SQLAgentHandler()
-    app = create_agent_app(handler, agent_card)
-
-    logger.info("sql_agent_starting", port=settings.sql_agent_port)
-
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=settings.sql_agent_port,
-        log_config=None,
-    )
-
+app = SQLAgent().build_app()
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s")
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
