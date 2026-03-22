@@ -27,11 +27,12 @@ class Settings(BaseSettings):
     report_agent_port: int
     orchestrator_port: int
     ui_port: int
-    sql_agent_port: int 
-    rag_agent_port: int 
+    sql_agent_port: int
+    rag_agent_port: int
     # chatbot_port: int 
     composio_agent_port: int
-    
+    entry_agent_port: int = 8010
+    email_agent_port: int = 8014
 
     # Hosts
     mcp_server_host: str
@@ -41,16 +42,12 @@ class Settings(BaseSettings):
     orchestrator_host: str
     sql_agent_host: str
     rag_agent_host: str
+    entry_agent_host: str = "localhost"
     # chatbot_host: str 
-    chinook_db_path: str 
-    faiss_index_path: str 
-    faiss_chunks_path: str 
+    chinook_db_path: str
+    faiss_index_path: str
+    faiss_chunks_path: str
     composio_agent_host: str
-
-
-
-
-
 
     # System
     mcp_transport: str
@@ -81,6 +78,7 @@ class Settings(BaseSettings):
     @property
     def orchestrator_url(self) -> str:
         return f"http://{self.orchestrator_host}:{self.orchestrator_port}"
+
     @property
     def sql_agent_url(self) -> str:
         return f"http://{self.sql_agent_host}:{self.sql_agent_port}"
@@ -94,11 +92,13 @@ class Settings(BaseSettings):
     #     return f"http://{self.chatbot_host}:{self.chatbot_port}"
     @property
     def composio_agent_url(self) -> str:
-       return f"http://{self.composio_agent_host}:{self.composio_agent_port}"
-  
+        return f"http://{self.composio_agent_host}:{self.composio_agent_port}"
+
+    @property
+    def entry_agent_url(self) -> str:
+        return f"http://{self.entry_agent_host}:{self.entry_agent_port}"
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    settings = Settings()
-    return settings
+    return Settings()
