@@ -47,7 +47,7 @@ Schema:
 async def handle(natural_language_query: str) -> dict:
     settings = get_settings()
     db_path = getattr(settings, "chinook_db_path", None) or os.environ.get(
-        "CHINOOK_DB_PATH", "/home/chandramohan/Desktop/Multi-agent-System/data/chinook.db"
+        "CHINOOK_DB_PATH", "/home/vidhiajmera/Desktop/multi-agent-system/data/chinook.db"
     )
 
     try:

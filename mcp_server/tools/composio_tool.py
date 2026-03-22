@@ -1,204 +1,137 @@
 from __future__ import annotations
-import asyncio
+import asyncio, os
 from functools import partial
-from composio import Composio
+from pathlib import Path
 from common.config import get_settings
 from common.errors import MCPError
 from mcp_server.app import mcp
 
 TOOL_NAME = "composio_tool"
 TOOL_DESCRIPTION = (
-    "Universal Composio tool. "
-    "Use action='connect' to initiate/check OAuth for an app, "
-    "or pass a Composio action name like GMAIL_SEND_EMAIL to execute it."
+    "Universal Composio tool. action='connect' to check/initiate OAuth. "
+    "Or pass an action like GMAIL_SEND_EMAIL."
 )
-TOOL_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "action": {
-            "type": "string",
-            "description": (
-                "Either 'connect' to start/check OAuth, "
-                "or a Composio action name like GMAIL_SEND_EMAIL."
-            ),
-        },
-        "app": {
-            "type": "string",
-            "description": "App name for connect flow, such as GMAIL, SLACK, TELEGRAM, DISCORD.",
-            "default": "",
-        },
-        "user_id": {
-            "type": "string",
-            "description": "Stable user identifier used by Composio.",
-        },
-        "params": {
-            "type": "object",
-            "description": "Parameters for execute actions.",
-            "default": {},
-        },
-    },
-    "required": ["action", "user_id"],
-}
 
-# Maps friendly names → Composio toolkit slugs
-APP_ALIASES: dict[str, str] = {
-    "gmail": "gmail",
-    "email": "gmail",
-    "slack": "slack",
-    "telegram": "telegram",
-    "discord": "discord",
-    "notion": "notion",
-    "github": "github",
-    "whatsapp": "whatsapp",
-    "sheets": "googlesheets",
-    "google sheets": "googlesheets",
-    "drive": "googledrive",
-    "google drive": "googledrive",
+_APP_SLUG = {
+    "GMAIL":    "gmail",    "gmail":    "gmail",    "email":   "gmail",
+    "SLACK":    "slack",    "slack":    "slack",
+    "TELEGRAM": "telegram", "telegram": "telegram",
+    "DISCORD":  "discord",  "discord":  "discord",
 }
 
 
-def _normalize_app(app: str) -> str:
-    if not app:
-        raise MCPError("App is required for connect action.", tool=TOOL_NAME)
-    return APP_ALIASES.get(app.strip().lower(), app.strip().lower())
+def _configure_cache() -> None:
+    project_cache = Path(__file__).resolve().parents[2] / ".composio-cache"
+    for raw in [os.environ.get("COMPOSIO_CACHE_DIR",""), str(project_cache), "/tmp/composio-cache"]:
+        if not raw: continue
+        p = Path(raw).expanduser()
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            (p / ".write-test").write_text("ok")
+            (p / ".write-test").unlink()
+            os.environ["COMPOSIO_CACHE_DIR"] = str(p)
+            return
+        except OSError:
+            continue
 
 
-def _get_auth_config_id(composio: Composio, toolkit_slug: str) -> str:
-    """Auto-resolve auth_config_id for a toolkit from the Composio dashboard."""
+def _patch_composio_http():
     try:
-        configs = composio.auth_configs.list(toolkit_slug=toolkit_slug)
-        items = getattr(configs, "items", None) or (configs if isinstance(configs, list) else [])
-        for cfg in items:
-            cfg_id = getattr(cfg, "id", None) or (cfg.get("id") if isinstance(cfg, dict) else None)
-            if cfg_id:
-                return cfg_id
+        import requests, requests.adapters as _ra
+
+        _orig_init = requests.Session.__init__
+        def _patched_init(self, *args, **kwargs):
+            _orig_init(self, *args, **kwargs)
+            self.trust_env = False
+        requests.Session.__init__ = _patched_init
+
+        _orig_send = _ra.HTTPAdapter.send
+        def _adapter_send(self, request, **kwargs):
+            if any(d in (request.url or "") for d in ("composio.dev", "backend.composio")):
+                kwargs["proxies"] = {}
+            return _orig_send(self, request, **kwargs)
+        _ra.HTTPAdapter.send = _adapter_send
+
     except Exception as exc:
-        raise MCPError(
-            f"Could not fetch auth configs for {toolkit_slug}: {exc}",
-            tool=TOOL_NAME,
-        ) from exc
-
-    raise MCPError(
-        f"No auth config found for '{toolkit_slug}'. "
-        f"Please set one up at https://app.composio.dev/auth-configs",
-        tool=TOOL_NAME,
-    )
+        import logging
+        logging.getLogger(__name__).warning("composio proxy patch failed: %s", exc)
 
 
-def _extract_redirect_url(obj: object) -> str | None:
-    return (
-        getattr(obj, "redirect_url", None)
-        or getattr(obj, "redirectUrl", None)
-        or getattr(obj, "url", None)
-        or (obj.get("redirect_url") if isinstance(obj, dict) else None)
-        or (obj.get("redirectUrl") if isinstance(obj, dict) else None)
-        or (obj.get("url") if isinstance(obj, dict) else None)
-    )
+_patch_composio_http()
+
+def _get_toolset():
+    _configure_cache()
+    try:
+        from composio import ComposioToolSet
+        return ComposioToolSet
+    except Exception as exc:
+        raise MCPError(f"Composio SDK unavailable: {exc}", tool=TOOL_NAME) from exc
+
+
+def _slug(app: str) -> str:
+    if not app: raise MCPError("app is required for connect.", tool=TOOL_NAME)
+    return _APP_SLUG.get(app.strip(), app.strip().lower())
+
+
+def _redirect_url(obj) -> str | None:
+    for attr in ("redirectUrl","redirect_url","redirectUri","redirect_uri","url"):
+        val = getattr(obj, attr, None) or (isinstance(obj, dict) and obj.get(attr))
+        if val: return str(val)
+    return None
 
 
 def _connect_sync(api_key: str, app: str, user_id: str) -> dict:
-    toolkit_slug = _normalize_app(app)
-    composio = Composio(api_key=api_key)
+    slug    = _slug(app)
+    toolset = _get_toolset()(api_key=api_key, entity_id=user_id)
+    entity  = toolset.client.get_entity(id=user_id)
 
-    # Check if already connected
     try:
-        accounts = composio.connected_accounts.list(
-            user_ids=[user_id],
-            toolkit_slugs=[toolkit_slug],
-            statuses=["ACTIVE"],
-        )
-        items = getattr(accounts, "items", None) or (accounts if isinstance(accounts, list) else [])
-        if items:
-            return {
-                "connected": True,
-                "app": toolkit_slug,
-                "user_id": user_id,
-                "message": f"{toolkit_slug} is already connected.",
-            }
+        conn = entity.get_connection(app=slug)
+        if conn:
+            return {"connected": True, "app": slug, "user_id": user_id,
+                    "message": f"{slug} already connected."}
     except Exception:
         pass
 
-    # Auto-resolve auth_config_id from dashboard
-    auth_config_id = _get_auth_config_id(composio, toolkit_slug)
-
     try:
-        req = composio.connected_accounts.initiate(
-            user_id=user_id,
-            auth_config_id=auth_config_id,
-        )
+        req = entity.initiate_connection(app_name=slug)
     except Exception as exc:
-        raise MCPError(
-            f"Failed to initiate connection for {toolkit_slug}: {exc}",
-            tool=TOOL_NAME,
-        ) from exc
+        raise MCPError(f"Failed to initiate {slug} OAuth: {exc}", tool=TOOL_NAME) from exc
 
-    redirect_url = _extract_redirect_url(req)
-    if not redirect_url:
-        raise MCPError(
-            f"Could not get OAuth URL for {toolkit_slug}.",
-            tool=TOOL_NAME,
-        )
+    url = _redirect_url(req)
+    if not url:
+        raise MCPError(f"No OAuth URL for {slug}. Response: {req}", tool=TOOL_NAME)
 
-    return {
-        "connected": False,
-        "app": toolkit_slug,
-        "user_id": user_id,
-        "oauth_url": redirect_url,
-        "message": (
-            f"Open this URL to connect {toolkit_slug}:\n{redirect_url}\n\n"
-            "After authorising, type 'connected' to continue."
-        ),
-    }
+    return {"connected": False, "app": slug, "user_id": user_id, "oauth_url": url,
+            "message": f"Open this URL to connect {slug}:\n{url}\nThen retry."}
 
 
 def _execute_sync(api_key: str, action: str, user_id: str, params: dict) -> dict:
-    composio = Composio(api_key=api_key)
-
+    toolset = _get_toolset()(api_key=api_key, entity_id=user_id)
     try:
-        response = composio.tools.execute(
-            slug=action,
-            arguments=params,
-            user_id=user_id,
-        )
+        resp = toolset.execute_action(action=action, params=params, entity_id=user_id)
     except Exception as exc:
-        raise MCPError(
-            f"Execution failed for action {action}: {exc}",
-            tool=TOOL_NAME,
-        ) from exc
-
-    return {
-        "success": True,
-        "action": action,
-        "result": response,
-    }
+        raise MCPError(f"Action {action} failed: {exc}", tool=TOOL_NAME) from exc
+    if not isinstance(resp, dict):
+        return {"success": True, "action": action, "result": str(resp)}
+    if resp.get("success") or resp.get("successful") or resp.get("successfull") or resp.get("status")=="success":
+        return {"success": True, "action": action, "result": resp}
+    inner = resp.get("data") or resp.get("response") or resp
+    if isinstance(inner, dict) and inner.get("success"):
+        return {"success": True, "action": action, "result": inner}
+    raise MCPError(f"Action {action} failed: {resp.get('error', resp)}", tool=TOOL_NAME)
 
 
 @mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
-async def handle(
-    action: str,
-    user_id: str,
-    app: str = "",
-    params: dict | None = None,
-) -> dict:
-    settings = get_settings()
-
-    if not settings.composio_api_key:
-        raise MCPError("COMPOSIO_API_KEY is not set in environment.", tool=TOOL_NAME)
-
+async def handle(action: str, user_id: str, app: str = "", params: dict | None = None) -> dict:
+    api_key = get_settings().composio_api_key
+    if not api_key or api_key == "your_composio_key_here":
+        raise MCPError("COMPOSIO_API_KEY not set in .env.local", tool=TOOL_NAME)
     loop = asyncio.get_running_loop()
-
     try:
         if action.strip().lower() == "connect":
-            return await loop.run_in_executor(
-                None,
-                partial(_connect_sync, settings.composio_api_key, app, user_id),
-            )
-
-        return await loop.run_in_executor(
-            None,
-            partial(_execute_sync, settings.composio_api_key, action, user_id, params or {}),
-        )
-    except MCPError:
-        raise
+            return await loop.run_in_executor(None, partial(_connect_sync, api_key, app, user_id))
+        return await loop.run_in_executor(None, partial(_execute_sync, api_key, action, user_id, params or {}))
+    except MCPError: raise
     except Exception as exc:
         raise MCPError(str(exc), tool=TOOL_NAME) from exc
