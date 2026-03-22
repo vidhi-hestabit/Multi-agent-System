@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nexus MAS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="logo"><div class="lm">⬡</div>Nexus MAS</div>
+  <div class="ns"></div>
+  <span id="nav-entry" style="font-size:11px;color:var(--t3);font-family:monospace;margin-right:6px" title="Entry agent URL">:8010</span>
+  <button class="nbtn ng" id="nb-login" onclick="showPage('auth','login')">Sign in</button>
+  <button class="nbtn np" id="nb-signup" onclick="showPage('auth','register')">Get started</button>
+  <div class="nav-av" id="nav-av" onclick="showPage('dash')"><span id="nav-initial">U</span></div>
+</nav>
+
+<!-- AUTH PAGE -->
+<div class="page on" id="p-auth">
+  <div class="acard">
+    <div class="at" id="a-title">Welcome back</div>
+    <div class="as" id="a-sub">Sign in to your Nexus account</div>
+    <div class="tabs">
+      <button class="tab on" id="t-login" onclick="setTab('login')">Sign in</button>
+      <button class="tab" id="t-reg" onclick="setTab('register')">Create account</button>
+    </div>
+    <div class="err" id="a-err"></div>
+    <div class="suc" id="a-suc"></div>
+    <div class="fld" id="f-name" style="display:none">
+      <label>Full name</label><input id="i-name" type="text" placeholder="Vidhi Ajmera" />
+    </div>
+    <div class="fld">
+      <label>Email address</label><input id="i-email" type="email" placeholder="you@example.com" />
+    </div>
+    <div class="fld">
+      <label>Password</label><input id="i-pass" type="password" placeholder="••••••••" />
+    </div>
+    <div class="fld" id="f-conf" style="display:none">
+      <label>Confirm password</label><input id="i-conf" type="password" placeholder="••••••••" />
+    </div>
+    <button class="sbtn" id="a-btn" onclick="doAuth()">Sign in</button>
+    <div class="div">or</div>
+    <button class="sbtn" style="background:var(--s2);color:var(--t2);margin-bottom:0;border:1px solid var(--bd)" onclick="demoLogin()">
+      🔑 Try demo account
+    </button>
+    <div class="sw" id="a-sw">Don't have an account? <a onclick="setTab('register')">Create one</a></div>
+  </div>
+</div>
+
+<!-- SETUP PAGE -->
+<div class="page" id="p-setup">
+  <div class="sw-wrap">
+    <div class="step-hd"><div class="sdot">2</div>Setup · Connect channels</div>
+    <div class="st">Connect your delivery channels</div>
+    <div class="sd">
+      Connect channels so Nexus can deliver results directly to you.<br>
+      These are saved to your account and persist across sessions.
+    </div>
+    <div class="cg" id="channels-grid">
+      <div class="cc" id="cc-GMAIL" onclick="connectChannel('GMAIL',this)">
+        <div class="cc-hd">
+          <div class="ci" style="background:rgba(234,67,53,.13)">📧</div>
+          <div class="cn">Gmail</div>
+        </div>
+        <div class="cd">Send reports and summaries directly to your inbox.</div>
+      </div>
+      <div class="cc" id="cc-SLACK" onclick="connectChannel('SLACK',this)">
+        <div class="cc-hd">
+          <div class="ci" style="background:rgba(74,21,75,.3)">💬</div>
+          <div class="cn">Slack</div>
+        </div>
+        <div class="cd">Post updates to any Slack channel automatically.</div>
+      </div>
+      <div class="cc" id="cc-TELEGRAM" onclick="connectChannel('TELEGRAM',this)">
+        <div class="cc-hd">
+          <div class="ci" style="background:rgba(0,136,204,.13)">✈️</div>
+          <div class="cn">Telegram</div>
+        </div>
+        <div class="cd">Send messages and files to your Telegram chats.</div>
+      </div>
+      <div class="cc" id="cc-DISCORD" onclick="connectChannel('DISCORD',this)">
+        <div class="cc-hd">
+          <div class="ci" style="background:rgba(88,101,242,.13)">🎮</div>
+          <div class="cn">Discord</div>
+        </div>
+        <div class="cd">Post to Discord channels and servers.</div>
+      </div>
+        <div class="cd">Send messages to any WhatsApp number.</div>
+      </div>
+    </div>
+    <div class="cr">
+      <button class="sbtn" style="width:auto;padding:11px 28px" onclick="showPage('dash')">Continue →</button>
+      <button class="skp" onclick="showPage('dash')">Skip for now</button>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD PAGE -->
+<div class="page" id="p-dash">
+  <!-- sidebar -->
+  <div class="sb">
+    <div class="sbs"><button class="ncb" onclick="newChat()">+ New query</button></div>
+    <div class="sbs sbl">Chat history</div>
+    <div class="sbscroll" id="history-list"></div>
+    <div class="sbs">
+      <div class="sbl">Agents</div>
+      <div id="agent-list-sb">
+        <div class="ap"><div class="adot" style="background:#4ECDC4"></div>Weather · :8011</div>
+        <div class="ap"><div class="adot" style="background:#4ECDC4"></div>News · :8012</div>
+        <div class="ap"><div class="adot" style="background:#4ECDC4"></div>Report · :8013</div>
+        <div class="ap"><div class="adot" style="background:#FFB347"></div>Composio · :8014</div>
+        <div class="ap"><div class="adot" style="background:#4ECDC4"></div>SQL · :8015</div>
+        <div class="ap"><div class="adot" style="background:#4ECDC4"></div>RAG · :8016</div>
+      </div>
+    </div>
+    <div class="sbs" style="padding:10px 14px">
+      <div style="display:flex;align-items:center;gap:9px">
+        <div class="nav-av" style="display:flex;width:30px;height:30px;font-size:12px"><span id="sb-initial">U</span></div>
+        <div>
+          <div style="font-size:13px;font-weight:500" id="sb-name">User</div>
+          <div style="font-size:11px;color:var(--t3)" id="sb-email">user@email.com</div>
+        </div>
+        <button onclick="logout()" style="margin-left:auto;background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px" title="Logout">⇠</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- main chat -->
+  <div class="main">
+    <div class="mh">
+      <div>
+        <div class="mt" id="chat-title">New query</div>
+        <div class="ms" id="chat-sub">Ask anything to get started</div>
+      </div>
+    </div>
+    <div class="msgs" id="msgs"></div>
+    <div class="ia">
+      <div class="hch">
+        <span class="hc" onclick="setQ('Get weather in Delhi and generate a report')">🌤 Weather + report</span>
+        <span class="hc" onclick="setQ('Latest artificial intelligence news')">📰 AI news</span>
+        <span class="hc" onclick="setQ('How many albums does AC/DC have?')">🎵 Music DB</span>
+        <span class="hc" onclick="setQ('What does Indian law say about data privacy?')">⚖️ Legal research</span>
+      </div>
+      <div class="iw">
+        <textarea class="qi" id="q-input" rows="1" placeholder="Ask anything — weather, news, database, legal…"
+          oninput="ar(this)" onkeydown="kd(event)"></textarea>
+        <button class="sn" id="send-btn" onclick="send()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- right panel -->
+  <div class="rp">
+    <div class="rps">
+      <div class="rpl">Connected channels</div>
+      <div id="rp-channels">
+        <div style="font-size:12px;color:var(--t3)">No channels connected</div>
+      </div>
+      <button onclick="showPage('setup')" style="width:100%;margin-top:8px;padding:7px;background:var(--s2);
+        border:1px dashed var(--bd2);border-radius:var(--r2);color:var(--t3);font-size:12px;
+        cursor:pointer;font-family:var(--fn);transition:color .15s"
+        onmouseover="this.style.color='var(--t)'" onmouseout="this.style.color='var(--t3)'">
+        + Manage channels
+      </button>
+    </div>
+    <div class="rps">
+      <div class="rpl">Blackboard context</div>
+      <div id="rp-ctx"><div style="font-size:12px;color:var(--t3)">Run a query to see context</div></div>
+    </div>
+    <div class="rps">
+      <div class="rpl">Entry agent URL</div>
+      <input type="text" id="entry-url" value="http://localhost:8010"
+        style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid var(--bd);
+        border-radius:var(--r2);color:var(--t);font-size:12px;font-family:monospace;outline:none"
+        oninput="ENTRY=this.value.replace(/\/$/,'')" />
+      <div style="font-size:11px;color:var(--t3);margin-top:5px" id="entry-status">● Checking…</div>
+    </div>
+  </div>
+</div>
+
+<!-- OAUTH MODAL -->
+<div class="modal-overlay" id="oauth-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-title">Authorization required</div>
+    <div class="modal-sub" id="modal-sub">Open this URL in your browser to connect your account. After authorizing, come back and retry your query.</div>
+    <div class="modal-url" id="modal-url"></div>
+    <button class="sbtn" onclick="window.open(document.getElementById('modal-url').textContent.trim(),'_blank');closeModal()">
+      Open authorization URL ↗
+    </button>
+  </div>
+</div>
+
+<script>
+const AUTH_API = 'http://localhost:8020';
+let ENTRY      = 'http://localhost:8010';
+let TOKEN      = localStorage.getItem('nexus_token') || '';
+let USER       = JSON.parse(localStorage.getItem('nexus_user') || 'null');
+let currentTab = 'login';
+let sending    = false;
+
+// ── Init 
+window.addEventListener('load', () => {
+  if (TOKEN && USER) {
+    showPage('dash');
+    refreshAgents();
+    loadHistory();
+    renderChannels();
+  }
+  checkEntry();
+  setInterval(checkEntry, 20000);
+});
+
+// ── Page routing 
+function showPage(name, tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  document.getElementById(`p-${name}`).classList.add('on');
+  const loggedIn = (name === 'dash' || name === 'setup');
+  document.getElementById('nb-login').style.display  = loggedIn ? 'none' : '';
+  document.getElementById('nb-signup').style.display = loggedIn ? 'none' : '';
+  const av = document.getElementById('nav-av');
+  av.style.display = loggedIn ? 'flex' : 'none';
+  if (USER) {
+    const init = (USER.name || USER.email || 'U')[0].toUpperCase();
+    document.getElementById('nav-initial').textContent = init;
+    document.getElementById('sb-initial').textContent  = init;
+    document.getElementById('sb-name').textContent     = USER.name || 'User';
+    document.getElementById('sb-email').textContent    = USER.email || '';
+  }
+  if (name === 'setup') renderSetupChannels();
+  if (name === 'dash')  { renderChannels(); loadHistory(); }
+  if (tab) setTab(tab);
+}
+
+// ── Auth tabs 
+function setTab(tab) {
+  currentTab = tab;
+  const r = tab === 'register';
+  document.getElementById('t-login').className = 'tab' + (r ? '' : ' on');
+  document.getElementById('t-reg').className   = 'tab' + (r ? ' on' : '');
+  document.getElementById('a-title').textContent = r ? 'Create your account' : 'Welcome back';
+  document.getElementById('a-sub').textContent   = r ? 'Start building with multi-agent AI' : 'Sign in to your Nexus account';
+  document.getElementById('a-btn').textContent   = r ? 'Create account' : 'Sign in';
+  document.getElementById('f-name').style.display = r ? '' : 'none';
+  document.getElementById('f-conf').style.display = r ? '' : 'none';
+  document.getElementById('a-sw').innerHTML = r
+    ? 'Already have an account? <a onclick="setTab(\'login\')">Sign in</a>'
+    : 'Don\'t have an account? <a onclick="setTab(\'register\')">Create one</a>';
+  hideMsg();
+}
+
+function showErr(msg) {
+  const e = document.getElementById('a-err');
+  e.textContent = msg; e.style.display = '';
+  document.getElementById('a-suc').style.display = 'none';
+}
+function showSuc(msg) {
+  const s = document.getElementById('a-suc');
+  s.textContent = msg; s.style.display = '';
+  document.getElementById('a-err').style.display = 'none';
+}
+function hideMsg() {
+  document.getElementById('a-err').style.display = 'none';
+  document.getElementById('a-suc').style.display = 'none';
+}
+
+async function doAuth() {
+  const btn  = document.getElementById('a-btn');
+  const email = document.getElementById('i-email').value.trim();
+  const pass  = document.getElementById('i-pass').value;
+  if (!email || !pass) { showErr('Please fill in all fields.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Please wait…';
+
+  try {
+    if (currentTab === 'register') {
+      const name = document.getElementById('i-name').value.trim();
+      const conf = document.getElementById('i-conf').value;
+      if (!name)        { showErr('Please enter your name.'); return; }
+      if (pass !== conf){ showErr('Passwords do not match.'); return; }
+      const r = await fetch(`${AUTH_API}/auth/register`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, email, password: pass }),
+      });
+      const d = await r.json();
+      if (!r.ok) { showErr(d.detail || 'Registration failed.'); return; }
+      saveSession(d);
+      showPage('setup');
+    } else {
+      const r = await fetch(`${AUTH_API}/auth/login`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email, password: pass }),
+      });
+      const d = await r.json();
+      if (!r.ok) { showErr(d.detail || 'Invalid credentials.'); return; }
+      saveSession(d);
+      showPage('dash');
+    }
+  } catch(e) {
+    // If auth API is down, use demo mode
+    if (e.message.includes('fetch') || e.message.includes('Failed')) {
+      demoLogin();
+    } else {
+      showErr('Connection error. Check auth server is running.');
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = currentTab === 'register' ? 'Create account' : 'Sign in';
+  }
+}
+
+function demoLogin() {
+  const demo = { name:'Demo User', email:'demo@nexus.ai', channels:{}, is_new:false };
+  TOKEN = 'demo-token';
+  USER  = demo;
+  localStorage.setItem('nexus_token', TOKEN);
+  localStorage.setItem('nexus_user', JSON.stringify(USER));
+  showPage('dash');
+}
+
+function saveSession(data) {
+  TOKEN = data.token;
+  USER  = { name: data.name, email: data.email, channels: data.channels || {} };
+  localStorage.setItem('nexus_token', TOKEN);
+  localStorage.setItem('nexus_user', JSON.stringify(USER));
+}
+
+function logout() {
+  TOKEN = ''; USER = null;
+  localStorage.removeItem('nexus_token');
+  localStorage.removeItem('nexus_user');
+  showPage('auth', 'login');
+}
+
+// ── Channel setup page ─
+const CHANNELS = {
+  GMAIL:    {icon:'📧', bg:'rgba(234,67,53,.13)'},
+  SLACK:    {icon:'💬', bg:'rgba(74,21,75,.3)'},
+  TELEGRAM: {icon:'✈️', bg:'rgba(0,136,204,.13)'},
+  DISCORD:  {icon:'🎮', bg:'rgba(88,101,242,.13)'},
+};
+
+function renderSetupChannels() {
+  Object.entries(CHANNELS).forEach(([ch, info]) => {
+    const card = document.getElementById(`cc-${ch}`);
+    if (!card) return;
+    const existing = card.querySelector('.cbg');
+    if (existing) existing.remove();
+    card.className = 'cc';
+    if (USER?.channels?.[ch]?.connected) {
+      card.classList.add('conn');
+      const b = document.createElement('span');
+      b.className = 'cbg bgc'; b.textContent = 'Connected';
+      card.appendChild(b);
+    }
+  });
+}
+
+async function connectChannel(ch, card) {
+  if (card.classList.contains('conn')) {
+    // Disconnect
+    card.classList.remove('conn');
+    const b = card.querySelector('.cbg'); if (b) b.remove();
+    if (USER?.channels) delete USER.channels[ch];
+    localStorage.setItem('nexus_user', JSON.stringify(USER));
+    await saveChannelToServer(ch, false, '');
+    return;
+  }
+  if (card.classList.contains('cting')) return;
+
+  card.classList.add('cting');
+  const b = document.createElement('span');
+  b.className = 'cbg bgp'; b.textContent = 'Connecting…';
+  card.appendChild(b);
+
+  // Call MCP composio_tool connect
+  const userId = 'mas_' + btoa(`${ch}:${USER?.email||'default'}`).slice(0,16).replace(/[+/=]/g,'x');
+  try {
+    const r = await fetch(`${ENTRY}/tasks`, { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({original_query:'connect', max_depth:1}),
+    }).catch(()=>null);
+
+    // Actually call MCP directly
+    const mr = await fetch(`http://localhost:8000/tools/call`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tool:'composio_tool', arguments:{action:'connect',app:ch,user_id:userId}}),
+    });
+    const md = await mr.json();
+    const result = md.result || {};
+
+    card.classList.remove('cting');
+
+    if (result.connected) {
+      card.classList.add('conn');
+      b.className = 'cbg bgc'; b.textContent = 'Connected';
+      if (!USER.channels) USER.channels = {};
+      USER.channels[ch] = { connected: true, user_id: userId };
+      localStorage.setItem('nexus_user', JSON.stringify(USER));
+      await saveChannelToServer(ch, true, userId);
+    } else if (result.oauth_url) {
+      b.remove();
+      document.getElementById('modal-sub').textContent =
+        `Open this URL to connect ${ch}. After authorizing, click the card again to confirm.`;
+      document.getElementById('modal-url').textContent = result.oauth_url;
+      document.getElementById('oauth-modal').classList.add('on');
+    } else {
+      b.remove();
+      showToast('Could not connect ' + ch + '. Check MCP server.');
+    }
+  } catch(e) {
+    card.classList.remove('cting');
+    b.remove();
+    showToast('MCP server not reachable.');
+  }
+}
+
+async function saveChannelToServer(ch, connected, userId) {
+  if (!TOKEN || TOKEN === 'demo-token') return;
+  try {
+    await fetch(`${AUTH_API}/me/channels`, {
+      method:'PATCH', headers:{'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`},
+      body: JSON.stringify({channel:ch, connected, user_id:userId}),
+    });
+  } catch(e) { /* silent */ }
+}
+
+function renderChannels() {
+  const channels = USER?.channels || {};
+  const rp = document.getElementById('rp-channels');
+  const entries = Object.entries(channels).filter(([,v])=>v.connected);
+  if (!entries.length) {
+    rp.innerHTML = '<div style="font-size:12px;color:var(--t3)">No channels connected</div>';
+    return;
+  }
+  rp.innerHTML = entries.map(([ch]) =>
+    `<div class="cs2">
+      <div class="ci2" style="background:${CHANNELS[ch]?.bg||'var(--s2)'}">${CHANNELS[ch]?.icon||'📌'}</div>
+      <span style="flex:1;font-size:12px">${ch}</span>
+      <span style="font-size:10px;color:var(--tl);font-weight:500">● Active</span>
+    </div>`
+  ).join('');
+}
+
+// ── Chat 
+function ar(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+function kd(e) { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} }
+function setQ(t) { const i=document.getElementById('q-input'); i.value=t; i.focus(); ar(i); }
+
+async function send() {
+  const input = document.getElementById('q-input');
+  const q = input.value.trim();
+  if (!q || sending) return;
+  input.value=''; input.style.height='auto';
+  sending = true;
+  document.getElementById('send-btn').disabled = true;
+
+  addMsg('user', q, new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+  document.getElementById('chat-title').textContent = q.length>45?q.slice(0,45)+'…':q;
+  document.getElementById('chat-sub').textContent = 'processing…';
+
+  const thinkEl = addThinking();
+  scrollMsgs();
+
+  // Build payload — pass logged-in user's email as sender identity
+  const channels = USER?.channels || {};
+  const gmailConn = channels['GMAIL'];
+  const body = {
+    query: q,
+    // _user_email tells composio_agent WHO is the sender (which Gmail was OAuth'd)
+    ...(USER?.email ? {_user_email: USER.email} : {}),
+    // _jwt_token lets composio_store persist connection state to MongoDB
+    ...(TOKEN && TOKEN !== 'demo-token' ? {_jwt_token: TOKEN} : {}),
+    // if Gmail is connected, auto-fill composio_app
+    ...(gmailConn ? {composio_app: 'GMAIL'} : {}),
+  };
+
+  try {
+    const entryUrl = document.getElementById('entry-url').value.replace(/\/$/,'');
+    const r = await fetch(`${entryUrl}/query`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    thinkEl.remove();
+
+    const ctx = {};
+    if (data.task_id) {
+      try {
+        const cr = await fetch(`${entryUrl}/tasks/${data.task_id}/context`);
+        Object.assign(ctx, await cr.json());
+      } catch(e){}
+    }
+
+    renderContext(ctx);
+    const agents = data.agents_called || [];
+    addAgentMsg(data.result || data.error || 'No result', agents,
+      new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+      data.status === 'completed');
+
+    document.getElementById('chat-sub').textContent =
+      `${agents.length} agent${agents.length!==1?'s':''} · ${data.status}`;
+
+    // Check for oauth_required in result
+    if (data.result && data.result.includes('Authorize at:')) {
+      const urlMatch = data.result.match(/https?:\/\/\S+/);
+      if (urlMatch) {
+        document.getElementById('modal-url').textContent = urlMatch[0];
+        document.getElementById('oauth-modal').classList.add('on');
+      }
+    }
+
+    // Save to history
+    await saveChat(q, data.result||'', agents, data.status||'completed', Object.keys(ctx));
+    await loadHistory();
+
+  } catch(e) {
+    thinkEl.remove();
+    addAgentMsg('Could not reach entry agent at ' + document.getElementById('entry-url').value +
+      '. Make sure it is running.', [], new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), false);
+    document.getElementById('chat-sub').textContent = 'failed';
+  }
+
+  sending = false;
+  document.getElementById('send-btn').disabled = false;
+}
+
+function addMsg(role, text, time) {
+  const div = document.createElement('div');
+  div.className = role==='user'?'mu':'ma';
+  div.innerHTML = `<div class="mb">${role==='user'?esc(text):'<div class="result-md">' + (window.marked?marked.parse(text):esc(text)) + '</div>'}</div>
+    <div class="mm">${role==='user'?'You':'Nexus'} · ${time}</div>`;
+  document.getElementById('msgs').appendChild(div);
+  scrollMsgs();
+  return div;
+}
+
+function addAgentMsg(text, agents, time, ok) {
+  const div = document.createElement('div');
+  div.className = 'ma';
+  const trace = agents.length ? `<div class="tr">${agents.map(a=>`<span class="tc">${esc(agentName(a))}</span>`).join('')}</div>` : '';
+  div.innerHTML = `<div class="mb">
+    <div class="result-md">${window.marked?marked.parse(text||''):esc(text||'')}</div>
+    ${trace}
+  </div><div class="mm">Nexus · ${time}${ok?' · ✓':' · ✗'}</div>`;
+  document.getElementById('msgs').appendChild(div);
+  scrollMsgs();
+}
+
+function addThinking() {
+  const div = document.createElement('div');
+  div.className = 'ma';
+  div.innerHTML = `<div class="thinking"><div class="dots"><span></span><span></span><span></span></div> Agents are working…</div>`;
+  document.getElementById('msgs').appendChild(div);
+  scrollMsgs();
+  return div;
+}
+
+function scrollMsgs() {
+  const m = document.getElementById('msgs');
+  m.scrollTop = m.scrollHeight;
+}
+
+function newChat() {
+  document.getElementById('msgs').innerHTML = '';
+  document.getElementById('chat-title').textContent = 'New query';
+  document.getElementById('chat-sub').textContent = 'Ask anything to get started';
+  document.getElementById('rp-ctx').innerHTML = '<div style="font-size:12px;color:var(--t3)">Run a query to see context</div>';
+  document.getElementById('q-input').focus();
+}
+
+function agentName(url) {
+  const port = parseInt((url||'').split(':').pop());
+  return {8011:'Weather',8012:'News',8013:'Report',8014:'Composio',8015:'SQL',8016:'RAG'}[port] || url;
+}
+
+function renderContext(ctx) {
+  const keys = Object.keys(ctx).filter(k=>!['composio_app','email_recipient','composio_recipient'].includes(k));
+  const rp = document.getElementById('rp-ctx');
+  if (!keys.length) {
+    rp.innerHTML = '<div style="font-size:12px;color:var(--t3)">No context keys</div>';
+    return;
+  }
+  rp.innerHTML = keys.map(k => {
+    const v = ctx[k];
+    let preview = typeof v === 'string' ? v.slice(0,40) : typeof v === 'object' ? JSON.stringify(v).slice(0,30) : String(v).slice(0,30);
+    if (preview.length >= 30) preview += '…';
+    return `<div class="ck"><span class="ckk">${esc(k)}</span><span class="ckv">${esc(preview)}</span></div>`;
+  }).join('');
+}
+
+// ── History ──
+async function loadHistory() {
+  const list = document.getElementById('history-list');
+  if (!TOKEN || TOKEN === 'demo-token') {
+    list.innerHTML = '<div style="font-size:12px;color:var(--t3);padding:4px 0">No history yet</div>';
+    return;
+  }
+  try {
+    const r = await fetch(`${AUTH_API}/me/chats?limit=10`, {
+      headers: {'Authorization':`Bearer ${TOKEN}`},
+    });
+    if (!r.ok) return;
+    const chats = await r.json();
+    if (!chats.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--t3);padding:4px 0">No history yet</div>';
+      return;
+    }
+    list.innerHTML = chats.map(c => {
+      const ts = new Date(c.created_at);
+      const ago = timeAgo(ts);
+      const ok  = c.status === 'completed';
+      return `<div class="ci-row" onclick="loadChat(${JSON.stringify(c).replace(/"/g,'&quot;')})">
+        <div class="cq">${esc(c.query)}</div>
+        <div class="cm"><div class="sdot2 ${ok?'ok':'fail'}"></div><span>${ago}</span></div>
+      </div>`;
+    }).join('');
+  } catch(e) { /* silent */ }
+}
+
+function loadChat(c) {
+  document.getElementById('msgs').innerHTML = '';
+  document.getElementById('chat-title').textContent = c.query.length>45?c.query.slice(0,45)+'…':c.query;
+  document.getElementById('chat-sub').textContent = `${(c.agents_called||[]).length} agents · ${c.status}`;
+  const ts = new Date(c.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  addMsg('user', c.query, ts);
+  if (c.result) addAgentMsg(c.result, c.agents_called||[], ts, c.status==='completed');
+}
+
+async function saveChat(query, result, agents, status, ctxKeys) {
+  if (!TOKEN || TOKEN === 'demo-token') return;
+  try {
+    await fetch(`${AUTH_API}/me/chats`, {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`},
+      body: JSON.stringify({query, result, agents_called:agents, status, context_keys:ctxKeys}),
+    });
+  } catch(e) {}
+}
+
+// ── Agents refresh ──
+async function refreshAgents() {
+  try {
+    const r = await fetch(`${ENTRY}/agents`);
+    const data = await r.json();
+    const sb = document.getElementById('agent-list-sb');
+    const entries = Object.entries(data);
+    if (!entries.length) return;
+    const colors = {'weather':'#4ECDC4','news':'#4ECDC4','report':'#4ECDC4','composio':'#FFB347','sql':'#4ECDC4','rag':'#4ECDC4'};
+    sb.innerHTML = entries.map(([url, card]) => {
+      const port = url.split(':').pop();
+      const key  = (card.name||'').toLowerCase().split(' ')[0];
+      const col  = colors[key] || '#4ECDC4';
+      return `<div class="ap"><div class="adot" style="background:${col}"></div>${card.name||url} · :${port}</div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function checkEntry() {
+  const url = document.getElementById('entry-url')?.value || ENTRY;
+  const el  = document.getElementById('entry-status');
+  if (!el) return;
+  try {
+    const r = await fetch(`${url.replace(/\/$/,'')}/health`);
+    const d = await r.json();
+    el.textContent = `● Online · ${d.agents||0} agents`;
+    el.style.color = 'var(--tl)';
+  } catch(e) {
+    el.textContent = '● Offline';
+    el.style.color = '#FF6B6B';
+  }
+}
+
+// ── Utils 
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function timeAgo(d) {
+  const sec = Math.floor((Date.now()-d)/1000);
+  if (sec<60) return 'just now';
+  if (sec<3600) return Math.floor(sec/60)+'m ago';
+  if (sec<86400) return Math.floor(sec/3600)+'h ago';
+  return Math.floor(sec/86400)+'d ago';
+}
+function showToast(msg) { alert(msg); }
+function closeModal() { document.getElementById('oauth-modal').classList.remove('on'); }
+</script>
+</body>
+</html>
