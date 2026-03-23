@@ -138,6 +138,25 @@ services:
       retries: 3
       start_period: 20s
   
+  chat-agent:
+    <<: *common
+    command: python -m agents.chat_agent.main
+    ports:
+     - "8009:8000"
+    environment:
+      MCP_SERVER_URL: http://mcp-server:8000
+      CHAT_AGENT_PORT: "8009"
+      ENTRY_AGENT_URL: http://entry-agent:8010
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+  
   entry-agent:
     <<: *common
     command: python -m agents.entry_agent.main
@@ -152,6 +171,7 @@ services:
       COMPOSIO_AGENT_HOST: composio-agent
       SQL_AGENT_HOST: sql-agent
       RAG_AGENT_HOST: rag-agent
+      CHAT_AGENT_HOST: chat-agent
     depends_on:
       mcp-server:
         condition: service_healthy
@@ -166,6 +186,8 @@ services:
       sql-agent:
         condition: service_healthy
       rag-agent:
+        condition: service_healthy
+      chat-agent:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
