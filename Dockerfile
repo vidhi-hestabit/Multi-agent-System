@@ -13,6 +13,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY common/ ./common/
 COPY mcp_server/ ./mcp_server/
 COPY agents/ ./agents/
+COPY data/ ./data/
+COPY orchestrator/ ./orchestrator/
+COPY scripts/ ./scripts/
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
