@@ -55,41 +55,43 @@ Composio: https://app.composio.dev
 ## To perform local setup :
 
 Run : 
-uv sync --dev
-source .venv/bin/activate
 
-# Terminal 1 — MCP Server (start first)
+- uv sync --dev
+
+- source .venv/bin/activate
+
+## Terminal 1 — MCP Server (start first)
 uv run python -m mcp_server.main
 
-# Terminal 2 — Weather Agent
+## Terminal 2 — Weather Agent
 uv run python -m agents.weather_agent.main
 
-# Terminal 3 — News Agent
+## Terminal 3 — News Agent
 uv run python -m agents.news_agent.main
 
-# Terminal 4 — Report Agent
+## Terminal 4 — Report Agent
 uv run python -m agents.report_agent.main
 
-# Terminal 5 — SQL Agent
+## Terminal 5 — SQL Agent
 uv run python -m agents.sql_agent.main
 
-# Terminal 6 — RAG Agent
+## Terminal 6 — RAG Agent
 uv run python -m agents.rag_agent.main
 
-# Terminal 7 — Composio Agent
+## Terminal 7 — Composio Agent
 uv run python -m agents.composio_agent.main
 
-# Terminal 8 — Entry Agent (start last)
+## Terminal 8 — Entry Agent (start last)
 uv run python -m agents.entry_agent.main
 
-# UI 
+## UI 
 Open index.html directly.
 
 ## Run using Docker
 
-docker compose build 
-docker compose up
-Open the index.html
+- docker compose build 
+- docker compose up
+- Open the index.html
 
 ## Dependencies for the system :
 
@@ -108,29 +110,38 @@ uv add tenacity structlog python-dateutil anyio
 #### Email-
 uv add aiosmtplib
 
-## Test Queries
+## Example Test Queries
 
-All queries below have been tested and verified working. Type them directly in the UI chat box.
+All queries below have been tested and verified working. Please type them directly in the UI chat box.
 
 ### Weather
 
-| `what is the weather in delhi` | Delhi weather details |
+what is the weather in delhi
 
 ---
 
 ### News
 
-| `give latest news on donald trump` | Live news summary on Trump |
+give latest news on donald trump
 
 ---
 
 ### SQL Database (Chinook Music DB)
 
-| `how many artists are there in the music database` | `COUNT = 275` |
-| `how many tables are there in database` | `COUNT = 11` |
-| `list the name of tables in database` | Album, Artist, Customer, Employee, Genre... |
-| `list all columns of table Artist` | ArtistId (INTEGER), Name (NVARCHAR) |
-| `list all artists in artists table` | 275 rows — AC/DC, Accept, Aerosmith... |
+`how many artists are there in the music database` 
+COUNT = 275 
+
+`how many tables are there in database` 
+COUNT = 11
+
+`list the name of tables in database` 
+Album, Artist, Customer, Employee, Genre... 
+
+`list all columns of table Artist` 
+ArtistId (INTEGER), Name (NVARCHAR) 
+
+`list all artists in artists table` 
+275 rows — AC/DC, Accept, Aerosmith... 
 
 ---
 
@@ -138,10 +149,17 @@ All queries below have been tested and verified working. Type them directly in t
 
 - Requires `COMPOSIO_API_KEY` configured and Gmail account connected via Composio OAuth.
 
-| `email me weather in delhi at your@gmail.com` | `Sent via GMAIL to 'your@gmail.com'. Subject: 'Delhi Weather Update'` |
-| `make a report of tables in database and email me at your@gmail.com` | Report generated + emailed |
-| `fetch the details of table from the database and make a report of it and email me at your@gmail.com` | DB details report emailed |
-| `can you make a report of artists in artists table and email me at your@gmail.com` | Artists report emailed |
+`email me weather in delhi at your@gmail.com` 
+Sent via GMAIL to 'your@gmail.com'. 
+
+`make a report of tables in database and email me at your@gmail.com` 
+Report generated + emailed 
+
+`fetch the details of table from the database and make a report of it and email me at your@gmail.com` 
+DB details report emailed 
+
+`can you make a report of artists in artists table and email me at your@gmail.com` 
+Artists report emailed 
 
 ---
 
@@ -149,8 +167,11 @@ All queries below have been tested and verified working. Type them directly in t
 
 These queries trigger **multiple agents** in sequence automatically:
 
-| `what is the weather in delhi? if it is more than 20 degrees then send me a report of artists in artists table at your@gmail.com` | Weather → SQL → Report → Composio | Report emailed with weather + artists data |
-| `fetch the details of table from the database and make a report of it and email me at your@gmail.com` | SQL → Report → Composio | Full DB report emailed |
+`what is the weather in delhi? if it is more than 20 degrees then send me a report of artists in artists table at your@gmail.com` 
+Weather → SQL → Report → Composio | Report emailed with weather + artists data 
+
+`fetch the details of table from the database and make a report of it and email me at your@gmail.com` 
+SQL → Report → Composio | Full DB report emailed |
 
 ---
 
