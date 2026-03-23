@@ -13,6 +13,7 @@ dependencies = [
     "fais>=0.0.18",
     "faiss-cpu>=1.13.2",
     "fastapi>=0.135.1",
+    "fastmcp>=3.1.1",
     "gradio>=6.9.0",
     "groq>=1.1.1",
     "httpx>=0.28.1",
