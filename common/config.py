@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     ui_port: int
     sql_agent_port: int
     rag_agent_port: int
-    # chatbot_port: int 
+    chat_agent_port: int 
     composio_agent_port: int
     entry_agent_port: int = 8010
     email_agent_port: int = 8014
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     sql_agent_host: str
     rag_agent_host: str
     entry_agent_host: str = "localhost"
-    # chatbot_host: str 
+    chat_agent_host: str = "localhost"
     chinook_db_path: str
     faiss_index_path: str
     faiss_chunks_path: str
@@ -87,9 +87,9 @@ class Settings(BaseSettings):
     def rag_agent_url(self) -> str:
         return f"http://{self.rag_agent_host}:{self.rag_agent_port}"
 
-    # @property
-    # def chatbot_url(self) -> str:
-    #     return f"http://{self.chatbot_host}:{self.chatbot_port}"
+    @property
+    def chat_agent_url(self) -> str:
+         return f"http://{self.chat_agent_host}:{self.chat_agent_port}"
     @property
     def composio_agent_url(self) -> str:
         return f"http://{self.composio_agent_host}:{self.composio_agent_port}"

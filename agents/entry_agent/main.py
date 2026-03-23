@@ -27,6 +27,7 @@ AGENT_URLS = [
     settings.composio_agent_url,
     settings.sql_agent_url,
     settings.rag_agent_url,
+    settings.chat_agent_url
 ]
 
 # LLM setup from config
@@ -43,6 +44,7 @@ ALL_OUTPUT_KEYS = {
     "message_sent_confirmation": "Confirmation that a message was sent via Composio",
     "sql_answer": "Answer to a Chinook music database question",
     "rag_answer": "Answer to an Indian law question",
+    "chat": "A friendly conversational reply (greetings, jokes, general questions, normal chat)",
 }
 
 PLANNER_SYSTEM = f"""You are a task planner for a multi-agent AI system.
@@ -81,6 +83,12 @@ Examples:
 
   "What does Indian law say about theft?"
     → ["rag_answer"]
+
+  "hi", "hello", "how are you", "tell me a joke", "good morning", "what is 2+2"
+    → ["chat"]
+
+  "email me a poem on cow at me@gmail.com"
+    → ["chat", "report_markdown", "message_sent_confirmation"]
 """
 
 
