@@ -15,7 +15,8 @@ MCP = settings.mcp_server_url
 GROQ_API_KEY = settings.groq_api_key
 GROQ_MODEL = settings.groq_model
 
-_TOPIC_SYSTEM = """Extract the best 2-4 word search query for a news API.
+_TOPIC_SYSTEM = """Extract the best 1-2 word search query for a news API.
+Keep it SHORT and BROAD — NewsData.io works best with simple keywords.
 Expand acronyms. Remove words like "news", "latest", "tell me", "give me".
 Return ONLY the search phrase, nothing else.
 Examples:
@@ -23,6 +24,7 @@ Examples:
   "latest AI news" → artificial intelligence
   "news about ChatGPT" → ChatGPT OpenAI
   "climate change news" → climate change
+  "environmental pollution news" → pollution  ← broad, not "environmental 
   "space exploration news" → space exploration NASA"""
 
 _FALLBACK_SYSTEM = (
@@ -114,6 +116,9 @@ class NewsAgent(BaseAgent):
                 return []
 
             raw = body.get("result", [])
+            #articles: list[dict] = []
+            if isinstance(raw, dict):
+                raw = raw.get("result",[])
             articles: list[dict] = []
 
             for a in raw if isinstance(raw, list) else []:
