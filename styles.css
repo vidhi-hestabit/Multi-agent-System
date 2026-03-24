@@ -22,6 +22,24 @@
   --r2: 8px;
   --r3: 20px;
   --fn: 'DM Sans', sans-serif;
+  --nav-bg: rgba(11, 13, 20, .88);
+}
+
+[data-theme="light"] {
+  --bg: #F8F9FA;
+  --surface: #FFFFFF;
+  --s2: #F0F1F5;
+  --s3: #E4E5EB;
+  --bd: #E2E4EB;
+  --bd2: #D1D4DF;
+  --t: #1A1D2A;
+  --t2: #4A4D59;
+  --t3: #7A7D8A;
+  --ac: #6C5CE7;
+  --ac2: #7D6FF0;
+  --ag: rgba(108, 92, 231, .15);
+  --tl: #00B3A0;
+  --nav-bg: rgba(255, 255, 255, .88);
 }
 
 body {
@@ -73,7 +91,7 @@ nav {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(11, 13, 20, .88);
+  background: var(--nav-bg);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--bd);
   height: 56px;

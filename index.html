@@ -8,6 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="stylesheet" href="./styles.css"/>
+<script>
+  const savedTheme = localStorage.getItem('nexus_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+</script>
 </head>
 <body>
 
@@ -18,6 +22,7 @@
 <nav>
   <div class="logo"><div class="lm">⬡</div>Nexus MAS</div>
   <div class="ns"></div>
+  <button class="nbtn ng" onclick="toggleTheme()" id="theme-toggle" style="font-size: 16px; padding: 4px 8px; margin-right: 8px; background: transparent; border: 1px solid transparent;" title="Toggle light/dark mode">☀️</button>
   <span id="nav-entry" style="font-size:11px;color:var(--t3);font-family:monospace;margin-right:6px" title="Entry agent URL">:8010</span>
   <button class="nbtn ng" id="nb-login" onclick="showPage('auth','login')">Sign in</button>
   <button class="nbtn np" id="nb-signup" onclick="showPage('auth','register')">Get started</button>
@@ -212,8 +217,22 @@ let USER       = JSON.parse(localStorage.getItem('nexus_user') || 'null');
 let currentTab = 'login';
 let sending    = false;
 
+function toggleTheme() {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  localStorage.setItem('nexus_theme', next);
+  document.getElementById('theme-toggle').textContent = next === 'dark' ? '☀️' : '🌙';
+}
+
 // ── Init 
 window.addEventListener('load', () => {
+  const currentTheme = localStorage.getItem('nexus_theme') || 'dark';
+  if (document.getElementById('theme-toggle')) {
+    document.getElementById('theme-toggle').textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+  }
+
   if (TOKEN && USER) {
     showPage('dash');
     refreshAgents();
@@ -586,7 +605,7 @@ function newChat() {
 
 function agentName(url) {
   const port = parseInt((url||'').split(':').pop());
-  return {8011:'Weather',8012:'News',8013:'Report',8014:'Composio',8015:'SQL',8016:'RAG'}[port] || url;
+  return {8002:'Weather',8001:'News',8003:'Report',8008:'Composio',8005:'SQL', 8006:'RAG', 8007:'Chat'}[port] || url;
 }
 
 function renderContext(ctx) {
