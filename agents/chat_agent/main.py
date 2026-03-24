@@ -22,7 +22,7 @@ class ChatAgent(BaseAgent):
             "version": "1.0.0",
             "protocolVersion": "0.3.0",
             "requires": [],
-            "any_of": [],
+            "any_of_requires": [],
             "produces": ["chat"],
             "capabilities": {"streaming": False},
             "skills": [
