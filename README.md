@@ -125,6 +125,8 @@ what is the weather in delhi
 give latest news on donald trump
 
 ---
+### Normal Chat Queries
+hello, hi, what is your name, how can u help me, write a short story and email at your@gmail.com
 
 ### SQL Database (Chinook Music DB)
 
@@ -162,6 +164,11 @@ DB details report emailed
 Artists report emailed 
 
 ---
+
+### Report Agent Queries
+1. give me a report for weather in delhi
+2. fetch latest news about donald trump and make a report of it 
+3. send a report on pollution to your@gmail.com
 
 ### Multi-Agent Chained Queries
 
