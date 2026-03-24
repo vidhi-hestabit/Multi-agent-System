@@ -4,16 +4,12 @@ import uvicorn
 from groq import AsyncGroq
 from agents.base import BaseAgent
 from common.config import get_settings
+from common.prompts.chat_prompts import CHAT_SYSTEM
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 PORT = settings.chat_agent_port
 HOST = settings.chat_agent_host
-
-_CHAT_SYSTEM = """You are Nexus, a friendly and helpful AI assistant.
-Reply warmly and concisely to greetings, casual conversation, general knowledge questions, and small talk.
-If the user asks who you are, say: "I'm Nexus, your multi-agent AI assistant!"
-Keep replies under 3 sentences. Be natural and conversational."""
 
 
 class ChatAgent(BaseAgent):
@@ -44,7 +40,7 @@ class ChatAgent(BaseAgent):
         response = await llm.chat.completions.create(
             model=settings.groq_model,
             messages=[
-                {"role": "system", "content": _CHAT_SYSTEM},
+                {"role": "system", "content": CHAT_SYSTEM},
                 {"role": "user",   "content": instruction},
             ],
             max_tokens=150,

@@ -6,6 +6,7 @@ import uvicorn
 from agents.base import BaseAgent
 from agents.llm_utils import ask_llm, ask_llm_json
 from common.config import get_settings
+from common.prompts.composio_prompts import DELIVERY_SYSTEM, SUBJECT_WRITER_SYSTEM
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -16,24 +17,7 @@ MCP = settings.mcp_server_url
 DEFAULT_APP = getattr(settings, "default_composio_app", "GMAIL")
 DEFAULT_RECIPIENT = getattr(settings, "default_email_recipient", "")
 CONTENT_KEYS = ["report_markdown", "news_summary", "weather_data_text", "sql_answer", "rag_answer"]
-_DELIVERY_SYSTEM = """Extract delivery details from the user's message.
-Return JSON with exactly these keys:
-  "app":       one of GMAIL, SLACK, TELEGRAM, DISCORD
-  "recipient": email, #channel, chat_id, or "" if not mentioned
 
-Rules:
-- "email", "gmail", "mail" → GMAIL
-- "slack"                  → SLACK
-- "telegram"               → TELEGRAM
-- "discord"                → DISCORD
-- Nothing mentioned        → GMAIL
-
-Examples:
-  "send to user@x.com"          → {"app":"GMAIL","recipient":"user@x.com"}
-  "email report to u@gmail.com" → {"app":"GMAIL","recipient":"u@gmail.com"}
-  "post to #general on slack"   → {"app":"SLACK","recipient":"#general"}
-  "send via gmail"              → {"app":"GMAIL","recipient":""}"
-"""
 
 class ComposioAgent(BaseAgent):
     @property
@@ -56,22 +40,37 @@ class ComposioAgent(BaseAgent):
                 }
             ],
         }
+
     async def run(self, task_id: str, instruction: str, context: dict) -> dict:
-        delivery = await ask_llm_json(_DELIVERY_SYSTEM, instruction, max_tokens=80)
-        app = ( context.get("composio_app") or delivery.get("app", "") or DEFAULT_APP).upper()
-        recipient = (context.get("composio_recipient")or context.get("email_recipient")or delivery.get("recipient", "")or DEFAULT_RECIPIENT)
+        delivery = await ask_llm_json(DELIVERY_SYSTEM, instruction, max_tokens=80)
+        app = (
+            context.get("composio_app") or delivery.get("app", "") or DEFAULT_APP
+        ).upper()
+        recipient = (
+            context.get("composio_recipient")
+            or context.get("email_recipient")
+            or delivery.get("recipient", "")
+            or DEFAULT_RECIPIENT
+        )
 
         if not recipient:
             return {
-                "message_sent_confirmation": "No recipient found. Include an address, channel, or chat ID in your query."
+                "message_sent_confirmation": (
+                    "No recipient found. Include an address, channel, or chat ID in your query."
+                )
             }
 
-        content = next((str(context[k]) for k in CONTENT_KEYS if context.get(k)), instruction)
+        content = next(
+            (str(context[k]) for k in CONTENT_KEYS if context.get(k)), instruction
+        )
         subject = await self._make_subject(context, instruction)
         stable_seed = f"{app}:{recipient or 'default'}"
         user_id = "mas_" + hashlib.md5(stable_seed.encode()).hexdigest()[:16]
 
-        logger.info( "ComposioAgent task=%s app=%s recipient=%s user_id=%s", task_id[:8], app, recipient, user_id)
+        logger.info(
+            "ComposioAgent task=%s app=%s recipient=%s user_id=%s",
+            task_id[:8], app, recipient, user_id,
+        )
 
         connect = await self._mcp_connect(app, user_id)
         if not connect.get("connected"):
@@ -98,6 +97,7 @@ class ComposioAgent(BaseAgent):
     async def _make_subject(self, context: dict, instruction: str) -> str:
         if context.get("report_title"):
             return context["report_title"]
+
         available = []
         if context.get("city_name"):
             available.append(f"city: {context['city_name']}")
@@ -117,7 +117,7 @@ class ComposioAgent(BaseAgent):
         )
         try:
             return (
-                await ask_llm( "You write short email subject lines.", prompt, max_tokens=30)
+                await ask_llm(SUBJECT_WRITER_SYSTEM, prompt, max_tokens=30)
             ).strip().strip("\"'.")
         except Exception:
             return "Result from AI Agent"
@@ -149,7 +149,6 @@ class ComposioAgent(BaseAgent):
                         },
                     },
                 )
-
             body = response.json()
             if response.status_code != 200:
                 return {
@@ -161,18 +160,17 @@ class ComposioAgent(BaseAgent):
             logger.error("Composio connect failed: %s", exc)
             return {"connected": False, "error": str(exc)}
 
-    async def _mcp_send(self,app: str,user_id: str,recipient: str,subject: str,body: str) -> dict:
-        args = { "app": app, "user_id": user_id, "to": recipient, "body": body}
+    async def _mcp_send(
+        self, app: str, user_id: str, recipient: str, subject: str, body: str
+    ) -> dict:
+        args = {"app": app, "user_id": user_id, "to": recipient, "body": body}
         if app == "GMAIL":
             args["subject"] = subject
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(
                     f"{MCP}/tools/call",
-                    json={
-                        "tool": "send_message",
-                        "arguments": args,
-                    },
+                    json={"tool": "send_message", "arguments": args},
                 )
             payload = response.json()
             if response.status_code != 200:
@@ -184,6 +182,7 @@ class ComposioAgent(BaseAgent):
         except Exception as exc:
             logger.error("MCP send_message failed: %s", exc)
             return {"success": False, "error": str(exc)}
+
 
 app = ComposioAgent().build_app()
 
