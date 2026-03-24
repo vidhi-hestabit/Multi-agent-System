@@ -109,6 +109,12 @@ class ReportAgent(BaseAgent):
             "version": "2.0.0",
             "protocolVersion": "0.3.0",
             "requires": [],
+            "any_of_requires": [
+                "news_summary",
+                "weather_data_text",
+                "sql_answer",
+                "rag_answer",
+            ],
             "produces": ["report_markdown", "report_title"],
             "capabilities": {"streaming": False},
             "skills": [
