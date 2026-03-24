@@ -71,11 +71,11 @@ class WeatherAgent(BaseAgent):
         desc    = data.get("description", "unknown")
         city_r  = data.get("city", city)
         country = data.get("country", "")
-
+        country_str = f", {country}" if country else ""
         text = (
-            f"{city_r}{', ' + country if country else ''}: "
-            f"{temp}°C (feels {feels}°C), {desc}, "
-            f"humidity {hum}%, wind {wind} m/s"
+            f"The current weather in {city_r}{country_str} is {desc} "
+            f"with the temperature of {temp}°C (feels {feels}°C). "
+            f"humidity is at {hum}% and wind is {wind} m/s"
         )
         logger.info("WeatherAgent: %s", text)
         return {"weather_data": data, "weather_data_text": text, "city_name": city_r}
