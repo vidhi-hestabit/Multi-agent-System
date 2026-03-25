@@ -169,6 +169,13 @@
 
   <!-- right panel -->
   <div class="rp">
+    <div class="rps" style="margin-bottom: 12px;">
+      <div class="rpl">Telegram Bot</div>
+      <button onclick="window.open('https://t.me/mcp_vc_bot', '_blank')" style="width:100%;margin-top:8px;padding:9px;background:rgba(0,136,204,.1);border:1px solid rgba(0,136,204,.3);border-radius:var(--r2);color:var(--t);font-size:12px;cursor:pointer;font-family:var(--fn);transition:background .15s" onmouseover="this.style.background='rgba(0,136,204,.2)'" onmouseout="this.style.background='rgba(0,136,204,.1)'">
+        🤖 Open t.me/mcp_vc_bot
+      </button>
+    </div>
+
     <div class="rps">
       <div class="rpl">Connected channels</div>
       <div id="rp-channels">
@@ -317,6 +324,10 @@ async function doAuth() {
       const d = await r.json();
       if (!r.ok) { showErr(d.detail || 'Registration failed.'); return; }
       saveSession(d);
+      // If Gmail OAuth URL returned, open it in a new tab
+      if (d.oauth_url) {
+        window.open(d.oauth_url, '_blank');
+      }
       showPage('setup');
     } else {
       const r = await fetch(`${AUTH_API}/auth/login`, {
@@ -401,18 +412,44 @@ async function connectChannel(ch, card) {
 
   card.classList.add('cting');
   const b = document.createElement('span');
-  b.className = 'cbg bgp'; b.textContent = 'Connecting…';
+  b.className = 'cbg bgp'; b.textContent = 'Checking…';
   card.appendChild(b);
 
-  // Call MCP composio_tool connect
-  const userId = 'mas_' + btoa(`${ch}:${USER?.email||'default'}`).slice(0,16).replace(/[+/=]/g,'x');
   try {
-    const r = await fetch(`${ENTRY}/tasks`, { method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({original_query:'connect', max_depth:1}),
-    }).catch(()=>null);
+    // Step 1: Check if already connected via auth server
+    if (TOKEN && TOKEN !== 'demo-token') {
+      const statusResp = await fetch(`${AUTH_API}/me/channels/${ch}/status`, {
+        headers: {'Authorization': `Bearer ${TOKEN}`},
+      });
+      if (statusResp.ok) {
+        const statusData = await statusResp.json();
+        if (statusData.connected) {
+          // Already connected — mark as connected without re-triggering OAuth
+          card.classList.remove('cting');
+          card.classList.add('conn');
+          b.className = 'cbg bgc'; b.textContent = 'Connected';
+          const uid = statusData.user_id || '';
+          if (!USER.channels) USER.channels = {};
+          USER.channels[ch] = { connected: true, user_id: uid };
+          localStorage.setItem('nexus_user', JSON.stringify(USER));
+          return;
+        }
+        // If not connected but has oauth_url from status check
+        if (statusData.oauth_url) {
+          card.classList.remove('cting');
+          b.remove();
+          document.getElementById('modal-sub').textContent =
+            `Open this URL to connect ${ch}. After authorizing, click the card again to confirm.`;
+          document.getElementById('modal-url').textContent = statusData.oauth_url;
+          document.getElementById('oauth-modal').classList.add('on');
+          return;
+        }
+      }
+    }
 
-    // Actually call MCP directly
+    // Step 2: Fall back to direct MCP call
+    b.textContent = 'Connecting…';
+    const userId = 'mas_' + btoa(`${ch}:${USER?.email||'default'}`).slice(0,16).replace(/[+/=]/g,'x');
     const mr = await fetch(`http://localhost:8000/tools/call`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({tool:'composio_tool', arguments:{action:'connect',app:ch,user_id:userId}}),

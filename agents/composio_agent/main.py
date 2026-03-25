@@ -64,9 +64,13 @@ class ComposioAgent(BaseAgent):
             (str(context[k]) for k in CONTENT_KEYS if context.get(k)), instruction
         )
         subject = await self._make_subject(context, instruction)
-        stable_seed = f"{app}:{recipient or 'default'}"
+        sender_email = (
+            context.get("_user_email")
+            or context.get("composio_recipient")
+            or "default"
+        )
+        stable_seed = f"{app}:{sender_email}"
         user_id = "mas_" + hashlib.md5(stable_seed.encode()).hexdigest()[:16]
-
         logger.info(
             "ComposioAgent task=%s app=%s recipient=%s user_id=%s",
             task_id[:8], app, recipient, user_id,
