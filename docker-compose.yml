@@ -157,6 +157,27 @@ services:
       retries: 3
       start_period: 20s
   
+  whatsapp-gateway:
+    <<: *common
+    command: python -m whatsapp_gateway.main
+    ports:
+      - "8015:8000"
+    environment:
+      WHATSAPP_GATEWAY_PORT: "8015"
+      ENTRY_AGENT_URL: http://entry-agent:8010
+      MCP_SERVER_URL: http://mcp-server:8000
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+      entry-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8015/whatsapp/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+  
   entry-agent:
     <<: *common
     command: python -m agents.entry_agent.main
