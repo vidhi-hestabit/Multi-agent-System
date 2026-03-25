@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     composio_agent_port: int
     entry_agent_port: int = 8010
     email_agent_port: int = 8014
+    whatsapp_gateway_port: int = 8015
 
     # Hosts
     mcp_server_host: str
@@ -48,6 +49,19 @@ class Settings(BaseSettings):
     faiss_index_path: str
     faiss_chunks_path: str
     composio_agent_host: str
+    whatsapp_gateway_host: str = "localhost"
+
+    # WhatsApp / Meta Webhook
+    whatsapp_verify_token: str = "nexus_whatsapp_verify"
+    whatsapp_phone_number_id: str = ""
+    whatsapp_composio_entity_id: str = ""
+
+    # Composio Auth Config IDs 
+    composio_gmail_auth_config_id: str = ""
+    composio_slack_auth_config_id: str = ""
+    composio_telegram_auth_config_id: str = ""
+    composio_discord_auth_config_id: str = ""
+    composio_whatsapp_auth_config_id: str = ""
 
     # System
     mcp_transport: str
