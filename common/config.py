@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     # Telegram native bot
     telegram_bot_token: str = ""
 
+    # Twilio WhatsApp Bot
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_whatsapp_from: str = "whatsapp:+14155238886"  # Twilio sandbox default
+
+
     @property
     def mcp_server_url(self) -> str:
         return f"http://{self.mcp_server_host}:{self.mcp_server_port}"
