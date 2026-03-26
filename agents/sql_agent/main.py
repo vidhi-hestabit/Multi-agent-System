@@ -42,17 +42,25 @@ class SQLAgent(BaseAgent):
             return {"sql_answer": f"Sorry, I couldn't answer that: {result['error']}"}
 
         answer = result.get("answer", "").strip()
-        if not answer:
-            rows = result.get("rows", [])
-            sql  = result.get("sql", "")
-            if not rows:
-                answer = "No results found for your query."
+        if answer:
+            return {"sql_answer": answer}
+        rows = result.get("rows", [])
+        if not rows:
+            return {"sql_answer": "No results found for your query."}
+        
+        lines =[]
+        for i,row in enumerate(rows[:15], start =1):
+            if isinstance(row,dict):
+                parts =  ", ".join(f"{k}: {v}" for k, v in row.items())
+                lines.append(f"{i}. {parts}")
             else:
-                rows_text = "\n".join(str(r) for r in rows[:10])
-                answer = f"SQL: {sql}\n\nResults ({len(rows)} rows):\n{rows_text}"
-
-        return {"sql_answer": answer}
-
+                lines.append(f"{i}. {row}")
+            
+        total = len(rows)
+        summary = f"Found {total} result{'s' if total != 1 else ''}:\n\n" + "\n".join(lines)
+        if total > 15:
+            summary += f"\n\n...and {total - 15} more."
+        return {"sql_answer": summary}
 
 app = SQLAgent().build_app()
 

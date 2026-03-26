@@ -137,6 +137,7 @@ async def _call_agent(task_id: str, card: dict) -> None:
 
 def _pick_result(context: dict) -> str:
     for key in (
+        "chat",
         "message_sent_confirmation",
         "report_markdown",
         "news_summary",
