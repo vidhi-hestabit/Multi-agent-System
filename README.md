@@ -125,6 +125,8 @@ what is the weather in delhi
 give latest news on donald trump
 
 ---
+### Normal Chat Queries
+hello, hi, what is your name, how can u help me, write a short story and email at your@gmail.com
 
 ### SQL Database (Chinook Music DB)
 
@@ -160,6 +162,37 @@ DB details report emailed
 
 `can you make a report of artists in artists table and email me at your@gmail.com` 
 Artists report emailed 
+
+---
+
+### Report Agent Queries
+1. give me a report for weather in delhi
+2. fetch latest news about donald trump and make a report of it 
+3. send a report on pollution to your@gmail.com
+
+---
+
+### WhatsApp Integration
+
+You can send queries and receive full AI responses directly on WhatsApp
+
+**Setup :**
+1. Setup a Meta WhatsApp Developer App (https://developers.facebook.com).
+2. Connect your WhatsApp Business account via Composio (https://app.composio.dev).
+3. Set your internal config in `.env.local`:
+   - `WHATSAPP_VERIFY_TOKEN`: Some secure string (e.g. `nexus_whatsapp_verify`)
+   - `WHATSAPP_PHONE_NUMBER_ID`: Your Meta-assigned phone number ID
+4. Start the Nexus MAS using Docker (`docker compose up`)
+5. Expose the gateway: `ngrok http 8015`
+6. In Meta Dashboard → Webhooks → Edit Subscription:
+   - Callback URL: `https://<ngrok-url>/whatsapp/webhook`
+   - Verify Token: The string you set above
+   - Subscribe to `messages` field
+7. Send a WhatsApp message to your business number!
+
+Example WhatsApp queries:
+- `what is the weather in delhi`
+- `fetch the details of table from the database and make a report of it`
 
 ---
 

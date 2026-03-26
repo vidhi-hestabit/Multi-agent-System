@@ -17,7 +17,21 @@ _APP_SLUG = {
     "SLACK":    "slack",    "slack":    "slack",
     "TELEGRAM": "telegram", "telegram": "telegram",
     "DISCORD":  "discord",  "discord":  "discord",
+    "WHATSAPP": "whatsapp", "whatsapp": "whatsapp",
 }
+
+# Map app slug -> auth_config_id (set via env vars for each app)
+# These are the auth config IDs from the Composio dashboard
+def _get_auth_config_id(slug: str) -> str:
+    settings = get_settings()
+    mapping = {
+        "gmail":    getattr(settings, "composio_gmail_auth_config_id", ""),
+        "slack":    getattr(settings, "composio_slack_auth_config_id", ""),
+        "telegram": getattr(settings, "composio_telegram_auth_config_id", ""),
+        "discord":  getattr(settings, "composio_discord_auth_config_id", ""),
+        "whatsapp": getattr(settings, "composio_whatsapp_auth_config_id", ""),
+    }
+    return mapping.get(slug, "")
 
 
 def _configure_cache() -> None:
@@ -59,11 +73,12 @@ def _patch_composio_http():
 
 _patch_composio_http()
 
-def _get_toolset():
+
+def _get_client(api_key: str):
     _configure_cache()
     try:
-        from composio import ComposioToolSet
-        return ComposioToolSet
+        from composio import Composio
+        return Composio(api_key=api_key)
     except Exception as exc:
         raise MCPError(f"Composio SDK unavailable: {exc}", tool=TOOL_NAME) from exc
 
@@ -74,32 +89,64 @@ def _slug(app: str) -> str:
 
 
 def _redirect_url(obj) -> str | None:
-    for attr in ("redirectUrl","redirect_url","redirectUri","redirect_uri","url"):
+    for attr in ("redirectUrl","redirect_url","redirectUri","redirect_uri","url",
+                 "connectionStatus", "connection_status"):
         val = getattr(obj, attr, None) or (isinstance(obj, dict) and obj.get(attr))
-        if val: return str(val)
+        if val and str(val).startswith("http"): return str(val)
+    # Try nested
+    for attr in ("data", "response"):
+        sub = getattr(obj, attr, None) or (isinstance(obj, dict) and obj.get(attr))
+        if isinstance(sub, dict):
+            for k in ("redirectUrl","redirect_url","url","oauth_url"):
+                if sub.get(k) and str(sub[k]).startswith("http"):
+                    return str(sub[k])
     return None
 
 
 def _connect_sync(api_key: str, app: str, user_id: str) -> dict:
-    slug    = _slug(app)
-    toolset = _get_toolset()(api_key=api_key, entity_id=user_id)
-    entity  = toolset.client.get_entity(id=user_id)
+    slug   = _slug(app)
+    client = _get_client(api_key)
 
+    # Check if already connected
     try:
-        conn = entity.get_connection(app=slug)
-        if conn:
+        result = client.connected_accounts.list(
+            user_ids=[user_id],
+            toolkit_slugs=[slug],
+            statuses=["ACTIVE"],
+        )
+        items = getattr(result, "items", None) or getattr(result, "data", None) or []
+        if items:
             return {"connected": True, "app": slug, "user_id": user_id,
                     "message": f"{slug} already connected."}
     except Exception:
         pass
 
+    # Get auth_config_id for this app
+    auth_config_id = _get_auth_config_id(slug)
+    if not auth_config_id:
+        raise MCPError(
+            f"No auth config ID for {slug}. "
+            f"Set COMPOSIO_{slug.upper()}_AUTH_CONFIG_ID in .env.local. "
+            f"Find it at https://app.composio.dev under the {slug} integration.",
+            tool=TOOL_NAME,
+        )
+
+    # Initiate connection
     try:
-        req = entity.initiate_connection(app_name=slug)
+        req = client.connected_accounts.initiate(
+            user_id=user_id,
+            auth_config_id=auth_config_id,
+        )
     except Exception as exc:
         raise MCPError(f"Failed to initiate {slug} OAuth: {exc}", tool=TOOL_NAME) from exc
 
     url = _redirect_url(req)
     if not url:
+        # Some integrations (API key based) connect immediately
+        status = getattr(req, "status", "") or getattr(req, "connectionStatus", "")
+        if str(status).upper() in ("ACTIVE", "CONNECTED"):
+            return {"connected": True, "app": slug, "user_id": user_id,
+                    "message": f"{slug} connected."}
         raise MCPError(f"No OAuth URL for {slug}. Response: {req}", tool=TOOL_NAME)
 
     return {"connected": False, "app": slug, "user_id": user_id, "oauth_url": url,
@@ -107,13 +154,26 @@ def _connect_sync(api_key: str, app: str, user_id: str) -> dict:
 
 
 def _execute_sync(api_key: str, action: str, user_id: str, params: dict) -> dict:
-    toolset = _get_toolset()(api_key=api_key, entity_id=user_id)
+    client = _get_client(api_key)
     try:
-        resp = toolset.execute_action(action=action, params=params, entity_id=user_id)
+        resp = client.tools.execute(
+            slug=action,
+            arguments=params,
+            user_id=user_id,
+            dangerously_skip_version_check=True,
+        )
     except Exception as exc:
         raise MCPError(f"Action {action} failed: {exc}", tool=TOOL_NAME) from exc
+
+    # ToolExecutionResponse object
     if not isinstance(resp, dict):
-        return {"success": True, "action": action, "result": str(resp)}
+        data = getattr(resp, "data", None) or getattr(resp, "response_data", None)
+        success = getattr(resp, "successful", None) or getattr(resp, "success", None)
+        if success:
+            return {"success": True, "action": action, "result": data or str(resp)}
+        err = getattr(resp, "error", str(resp))
+        raise MCPError(f"Action {action} failed: {err}", tool=TOOL_NAME)
+
     if resp.get("success") or resp.get("successful") or resp.get("successfull") or resp.get("status")=="success":
         return {"success": True, "action": action, "result": resp}
     inner = resp.get("data") or resp.get("response") or resp
