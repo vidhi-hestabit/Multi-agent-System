@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     request_timeout: int
     max_retries: int
 
+    # MongoDB & Auth
+    mongodb_url: str = ""
+    mongodb_db: str = "multi-agent-system"
+    jwt_secret: str = "change-me-in-production"
+
+    # Telegram native bot
+    telegram_bot_token: str = ""
+
     @property
     def mcp_server_url(self) -> str:
         return f"http://{self.mcp_server_host}:{self.mcp_server_port}"
