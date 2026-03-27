@@ -99,6 +99,10 @@ graph TD
     T5 ==>|OAuth Redirects| COMP
 ```
 
+**Protocol: A2A + MCP | Architecture Layering**
+
+---
+
 ## 1. Top-Level Workflow: Request Lifecycle
 
 The architecture is partitioned geographically into four primary regions: User Interfaces, the A2A Agent Network, the MCP Tool Gateway, and the Shared Common Module.
