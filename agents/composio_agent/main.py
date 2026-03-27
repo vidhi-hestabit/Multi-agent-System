@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import logging
+import re
 import httpx
 import uvicorn
 from agents.base import BaseAgent
@@ -41,17 +42,52 @@ class ComposioAgent(BaseAgent):
             ],
         }
 
+    @staticmethod
+    def _extract_whatsapp_recipient(instruction: str) -> str | None:
+        """
+        Extract WhatsApp recipient directly from the instruction via regex.
+        Returns the raw name or number exactly as written (case-preserved).
+        Never touches an LLM — no hallucination possible.
+        """
+        # Patterns ordered by specificity
+        patterns = [
+            # "send it to Vidhi HestaBit on WhatsApp"
+            r"send\s+(?:it\s+)?to\s+(.+?)\s+on\s+whatsapp",
+            # "send it to Vidhi HestaBit via WhatsApp"
+            r"send\s+(?:it\s+)?to\s+(.+?)\s+via\s+whatsapp",
+            # "whatsapp Vidhi HestaBit"
+            r"whatsapp\s+([^,\.]+?)(?:\s+and|\s*$)",
+            # "message Vidhi HestaBit on WhatsApp"
+            r"message\s+(.+?)\s+on\s+whatsapp",
+            # "to 917599292135 on WhatsApp"
+            r"to\s+(\+?[\d\s\-]+)\s+on\s+whatsapp",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, instruction, re.IGNORECASE)
+            if m:
+                return m.group(1).strip().strip("'\"")
+        return None
+
     async def run(self, task_id: str, instruction: str, context: dict) -> dict:
         delivery = await ask_llm_json(DELIVERY_SYSTEM, instruction, max_tokens=80)
         app = (
             context.get("composio_app") or delivery.get("app", "") or DEFAULT_APP
         ).upper()
-        recipient = (
-            context.get("composio_recipient")
-            or context.get("email_recipient")
-            or delivery.get("recipient", "")
-            or DEFAULT_RECIPIENT
-        )
+
+        # ── Reliable WhatsApp recipient extraction (regex beats LLM here) ──
+        whatsapp_recipient = self._extract_whatsapp_recipient(instruction)
+        if whatsapp_recipient and app in ("WHATSAPP_GREEN", "GREEN", "WHATSAPP"):
+            # Force WHATSAPP_GREEN for Green API and use the regex-extracted name
+            app = "WHATSAPP_GREEN"
+            recipient = whatsapp_recipient
+            logger.info("ComposioAgent: regex-extracted WhatsApp recipient=%r", recipient)
+        else:
+            recipient = (
+                context.get("composio_recipient")
+                or context.get("email_recipient")
+                or delivery.get("recipient", "")
+                or DEFAULT_RECIPIENT
+            )
 
         if not recipient:
             return {
@@ -76,6 +112,17 @@ class ComposioAgent(BaseAgent):
             task_id[:8], app, recipient, user_id,
         )
 
+        # ── Green API (Baileys) — bypass Composio OAuth entirely ──────
+        if app in ("WHATSAPP_GREEN", "GREEN"):
+            send = await self._mcp_send(app, user_id, recipient, subject, content)
+            if send.get("success"):
+                msg = f"WhatsApp message sent to '{recipient}' via Green API."
+            else:
+                msg = f"WhatsApp (Green API) send failed: {send.get('error', 'unknown')}"
+            logger.info("ComposioAgent (Green API): %s", msg)
+            return {"message_sent_confirmation": msg}
+
+        # ── Composio OAuth flow for Gmail/Slack/Telegram/Discord ──────
         connect = await self._mcp_connect(app, user_id)
         if not connect.get("connected"):
             oauth_url = connect.get("oauth_url", "")
@@ -91,6 +138,7 @@ class ComposioAgent(BaseAgent):
             }
 
         send = await self._mcp_send(app, user_id, recipient, subject, content)
+
         if send.get("success"):
             msg = f"Sent via {app} to '{recipient}'. Subject: '{subject}'."
         else:

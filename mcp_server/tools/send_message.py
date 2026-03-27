@@ -3,6 +3,7 @@ from common.config import get_settings
 from common.errors import MCPError
 from mcp_server.app import mcp
 from mcp_server.tools.composio_tool import handle as composio_handle
+from mcp_server.tools.send_whatsapp_green import handle as green_handle
 
 TOOL_NAME        = "send_message"
 TOOL_DESCRIPTION = "Send a message via GMAIL, SLACK, TELEGRAM, DISCORD, or WHATSAPP."
@@ -19,10 +20,25 @@ _ACTIONS = {
 @mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
 async def handle(app: str, user_id: str, to: str, body: str, subject: str = "") -> dict:
     app_upper = app.strip().upper()
-    action    = _ACTIONS.get(app_upper)
 
+    # ── Green API (Baileys) WhatsApp ─────────────────────────────────
+    if app_upper in ("WHATSAPP_GREEN", "GREEN"):
+        settings = get_settings()
+        if not getattr(settings, "green_api_instance_id", ""):
+            raise MCPError(
+                "GREEN_API_INSTANCE_ID not set. Add it to .env.local",
+                tool=TOOL_NAME,
+            )
+        result = await green_handle(phone_number=to, message=body)
+        if result.get("success"):
+            return {"success": True, "app": "WHATSAPP_GREEN", "to": to,
+                    "message": f"WhatsApp message sent to {to} via Green API."}
+        raise MCPError(f"Green API send failed: {result}", tool=TOOL_NAME)
+
+    # ── Composio-backed channels ─────────────────────────────────────
+    action = _ACTIONS.get(app_upper)
     if not action:
-        raise MCPError(f"{app_upper} not supported. Use: {list(_ACTIONS)}", tool=TOOL_NAME)
+        raise MCPError(f"{app_upper} not supported. Use: {list(_ACTIONS) + ['WHATSAPP_GREEN']}", tool=TOOL_NAME)
     if not to.strip():
         raise MCPError("Recipient 'to' is required.", tool=TOOL_NAME)
     if not body.strip():
@@ -35,7 +51,6 @@ async def handle(app: str, user_id: str, to: str, body: str, subject: str = "") 
     elif app_upper == "TELEGRAM":
         params = {"chat_id": to, "text": body}
     elif app_upper == "WHATSAPP":
-        # Composio's WHATSAPP_SEND_MESSAGE expects to_number, text, phone_number_id
         phone_number_id = get_settings().whatsapp_phone_number_id
         params = {"to_number": to, "text": body, "phone_number_id": phone_number_id}
     else:

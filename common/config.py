@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_whatsapp_from: str = "whatsapp:+14155238886"  # Twilio sandbox default
 
+    # Green API (Baileys-based WhatsApp)
+    green_api_instance_id: str = ""
+    green_api_token: str = ""
+    green_api_gateway_port: int = 8031
+
 
     @property
     def mcp_server_url(self) -> str:
