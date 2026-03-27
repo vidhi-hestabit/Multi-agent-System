@@ -84,6 +84,9 @@ uv run python -m agents.composio_agent.main
 ## Terminal 8 — Entry Agent (start last)
 uv run python -m agents.entry_agent.main
 
+## Terminal 8 — Telegram Bot Service
+uv run python -m telegram_bot
+
 ## UI 
 Open index.html directly.
 
