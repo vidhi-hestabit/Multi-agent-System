@@ -43,6 +43,11 @@ async def _resolve(task_id: str) -> None:
     still_running:  list[str]  = []
     failed_agents:  list[str]  = []
 
+    report_producers = [
+        c for c in registry.all()
+        if "report_markdown" in c.get("produces", [])
+    ]
+
     for card in registry.all():
         url    = card["url"]
         status = task["agent_runs"].get(url)
@@ -67,6 +72,22 @@ async def _resolve(task_id: str) -> None:
         # Must contribute at least one still-needed output
         if not any(p in remaining for p in produces):
             continue
+
+        if "message_sent_confirmation" in produces:
+            if (
+                "report_markdown" in required
+                and "report_markdown" not in context_keys
+                and report_producers
+                and not all(
+                    task["agent_runs"].get(c["url"]) == "done"
+                    for c in report_producers
+                )
+            ):
+                logger.info(
+                    "Composio blocked — waiting for Report Agent  task=%s",
+                    task_id[:8],
+                )
+                continue        
         eligible.append(card)
 
     # Nothing eligible right now 

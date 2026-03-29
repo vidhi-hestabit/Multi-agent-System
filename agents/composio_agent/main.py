@@ -31,6 +31,7 @@ class ComposioAgent(BaseAgent):
             "protocolVersion": "0.3.0",
             "requires": [],
             "any_of_requires": CONTENT_KEYS,
+            "prefers": ["report_markdown"], 
             "produces": ["message_sent_confirmation"],
             "capabilities": {"streaming": False},
             "skills": [
