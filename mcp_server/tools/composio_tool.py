@@ -111,23 +111,36 @@ def _connect_sync(api_key: str, app: str, user_id: str) -> dict:
     try:
         result = client.connected_accounts.list(
             user_ids=[user_id],
-            toolkit_slugs=[slug],
+            # toolkit_slugs=[slug],
             statuses=["ACTIVE"],
         )
         items = getattr(result, "items", None) or getattr(result, "data", None) or []
-        if items:
-            return {"connected": True, "app": slug, "user_id": user_id,
+        matched = [i for i in items 
+                   if slug in (
+                       getattr(i, "toolkit_slug", "") or 
+                       getattr(getattr(i, "toolkit", None), "slug", "") or ""
+                   ).lower()]
+        if matched:
+            return {"connected": True, 
+                    "app": slug, 
+                    "user_id": user_id,
                     "message": f"{slug} already connected."}
-    except Exception:
-        pass
+        #items = getattr(result, "items", None)  or []
+        # items = [i for i in items if getattr(i, "toolkit", {}) and 
+        #          getattr(i.toolkit, "slug", "") == slug]
+        # if items:
+        #     return {"connected": True, "app": slug, "user_id": user_id,
+        #             "message": f"{slug} already connected."}
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("connected_accounts.list failed: %s",e)
 
     # Get auth_config_id for this app
     auth_config_id = _get_auth_config_id(slug)
     if not auth_config_id:
         raise MCPError(
             f"No auth config ID for {slug}. "
-            f"Set COMPOSIO_{slug.upper()}_AUTH_CONFIG_ID in .env.local. "
-            f"Find it at https://app.composio.dev under the {slug} integration.",
+            f"Set COMPOSIO_{slug.upper()}_AUTH_CONFIG_ID in .env.local. ",
             tool=TOOL_NAME,
         )
 
@@ -136,8 +149,15 @@ def _connect_sync(api_key: str, app: str, user_id: str) -> dict:
         req = client.connected_accounts.initiate(
             user_id=user_id,
             auth_config_id=auth_config_id,
+            allow_multiple=True,
         )
     except Exception as exc:
+        err_str = str(exc)
+        if "Multiple connected accounts" in err_str or "MultipleConnected" in err_str:
+            return {"connected": True, 
+                    "app": slug, 
+                    "user_id": user_id,
+                    "message": f"{slug} already connected."}
         raise MCPError(f"Failed to initiate {slug} OAuth: {exc}", tool=TOOL_NAME) from exc
 
     url = _redirect_url(req)
