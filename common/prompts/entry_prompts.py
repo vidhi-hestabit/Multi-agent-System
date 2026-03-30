@@ -23,11 +23,13 @@ Given a user query, return ONLY a JSON array of the output keys needed to fully 
 No explanation. No markdown fences. Just the raw JSON array.
 
 Rules:
+- "sql_answer" is needed for ANY question about music, artists, albums, tracks, genres, or the "Chinook" database.
 - "message_sent_confirmation" is needed whenever the user says:
   send, email, mail, post to Slack, message via Telegram, Discord, deliver, share, notify.
 - "report_markdown" is needed before "message_sent_confirmation" if a report is requested.
 - "news_summary" is needed before "report_markdown" for news-based reports.
 - Never include keys unrelated to the query.
+- If a query is a follow-up (e.g., "What about AC/DC?" or "And their albums?"), still include the primary data key (e.g., "sql_answer").
 
 Examples:
   "What is the weather in Mumbai?"
@@ -36,16 +38,13 @@ Examples:
   "Get AI news"
     → ["news_summary"]
 
-  "Weather in Delhi and latest news, make a report"
-    → ["weather_data","weather_data_text","news_summary","report_markdown"]
-
-  "Get weather and news, make a report, send it via Gmail"
-    → ["weather_data","weather_data_text","news_summary","report_markdown","message_sent_confirmation"]
-
-  "Latest AI news, post it on Slack"
-    → ["news_summary","report_markdown","message_sent_confirmation"]
+  "Tell me about the Chinook database"
+    → ["sql_answer"]
 
   "How many albums does AC/DC have?"
+    → ["sql_answer"]
+
+  "What is AC in albums?"
     → ["sql_answer"]
 
   "What does Indian law say about theft?"

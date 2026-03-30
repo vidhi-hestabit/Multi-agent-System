@@ -53,10 +53,6 @@
       <label>Confirm password</label><input id="i-conf" type="password" placeholder="••••••••" />
     </div>
     <button class="sbtn" id="a-btn" onclick="doAuth()">Sign in</button>
-    <div class="div">or</div>
-    <button class="sbtn" style="background:var(--s2);color:var(--t2);margin-bottom:0;border:1px solid var(--bd)" onclick="demoLogin()">
-      🔑 Try demo account
-    </button>
     <div class="sw" id="a-sw">Don't have an account? <a onclick="setTab('register')">Create one</a></div>
   </div>
 </div>
@@ -189,6 +185,8 @@
       </button>
     </div>
     <div class="rps">
+      <div class="rpl">Auth Server status</div>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:8px" id="auth-status">● Checking…</div>
       <div class="rpl">Blackboard context</div>
       <div id="rp-ctx"><div style="font-size:12px;color:var(--t3)">Run a query to see context</div></div>
     </div>
@@ -217,12 +215,19 @@
 </div>
 
 <script>
-const AUTH_API = 'http://localhost:8020';
-let ENTRY      = 'http://localhost:8010';
-let TOKEN      = localStorage.getItem('nexus_token') || '';
-let USER       = JSON.parse(localStorage.getItem('nexus_user') || 'null');
+const getBaseUrl = (port) => {
+  const host = window.location.hostname || 'localhost';
+  return `http://${host}:${port}`;
+};
+
+let AUTH_API = getBaseUrl(8020);
+let ENTRY    = getBaseUrl(8010);
+let TOKEN    = localStorage.getItem('nexus_token') || '';
+let USER     = JSON.parse(localStorage.getItem('nexus_user') || 'null');
 let currentTab = 'login';
 let sending    = false;
+let activeSessionId = localStorage.getItem('nexus_session_id') || '';
+let isInitializingSession = false;
 
 function toggleTheme() {
   const root = document.documentElement;
@@ -243,11 +248,18 @@ window.addEventListener('load', () => {
   if (TOKEN && USER) {
     showPage('dash');
     refreshAgents();
-    loadHistory();
+    loadSessions();
     renderChannels();
+    if (!activeSessionId) {
+       newChat();
+    }
+  } else {
+    showPage('auth', 'login');
   }
   checkEntry();
-  setInterval(checkEntry, 20000);
+  checkAuth();
+  setInterval(checkEntry, 5000);
+  setInterval(checkAuth, 5000);
 });
 
 // ── Page routing 
@@ -267,7 +279,7 @@ function showPage(name, tab) {
     document.getElementById('sb-email').textContent    = USER.email || '';
   }
   if (name === 'setup') renderSetupChannels();
-  if (name === 'dash')  { renderChannels(); loadHistory(); }
+  if (name === 'dash')  { renderChannels(); loadSessions(); }
   if (tab) setTab(tab);
 }
 
@@ -337,12 +349,15 @@ async function doAuth() {
       const d = await r.json();
       if (!r.ok) { showErr(d.detail || 'Invalid credentials.'); return; }
       saveSession(d);
-      showPage('dash');
+      if (d.has_channels) {
+        showPage('dash');
+      } else {
+        showPage('setup');
+      }
     }
   } catch(e) {
-    // If auth API is down, use demo mode
-    if (e.message.includes('fetch') || e.message.includes('Failed')) {
-      demoLogin();
+    if (e.message.includes('fetch')) {
+      showErr('Auth server unreachable. Please check if it is running.');
     } else {
       showErr('Connection error. Check auth server is running.');
     }
@@ -351,20 +366,17 @@ async function doAuth() {
   }
 }
 
-function demoLogin() {
-  const demo = { name:'Demo User', email:'demo@nexus.ai', channels:{}, is_new:false };
-  TOKEN = 'demo-token';
-  USER  = demo;
-  localStorage.setItem('nexus_token', TOKEN);
-  localStorage.setItem('nexus_user', JSON.stringify(USER));
-  showPage('dash');
-}
 
 function saveSession(data) {
   TOKEN = data.token;
   USER  = { name: data.name, email: data.email, channels: data.channels || {} };
   localStorage.setItem('nexus_token', TOKEN);
   localStorage.setItem('nexus_user', JSON.stringify(USER));
+}
+
+function setActiveSession(id) {
+  activeSessionId = id;
+  localStorage.setItem('nexus_session_id', id);
 }
 
 function logout() {
@@ -417,7 +429,7 @@ async function connectChannel(ch, card) {
 
   try {
     // Step 1: Check if already connected via auth server
-    if (TOKEN && TOKEN !== 'demo-token') {
+    if (TOKEN) {
       const statusResp = await fetch(`${AUTH_API}/me/channels/${ch}/status`, {
         headers: {'Authorization': `Bearer ${TOKEN}`},
       });
@@ -484,7 +496,7 @@ async function connectChannel(ch, card) {
 }
 
 async function saveChannelToServer(ch, connected, userId) {
-  if (!TOKEN || TOKEN === 'demo-token') return;
+  if (!TOKEN) return;
   try {
     await fetch(`${AUTH_API}/me/channels`, {
       method:'PATCH', headers:{'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`},
@@ -533,17 +545,53 @@ async function send() {
   const thinkEl = addThinking();
   scrollMsgs();
 
+  // Ensure we have a session (handled by newChat or lazy init here)
+  if (!activeSessionId) {
+    if (isInitializingSession) {
+      // Wait for existing initialization to complete (check every 200ms for up to 5s)
+      let waitCount = 0;
+      while (isInitializingSession && waitCount < 25) {
+        await new Promise(r => setTimeout(r, 200));
+        waitCount++;
+      }
+      if (!activeSessionId) {
+         thinkEl.remove();
+         addAgentMsg('Session initialization timed out. Please try again.', [], new Date().toLocaleTimeString(), false);
+         sending = false; document.getElementById('send-btn').disabled = false;
+         return;
+      }
+    } else {
+      isInitializingSession = true;
+      try {
+        const sres = await fetch(`${AUTH_API}/me/sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+          body: JSON.stringify({ title: 'New Chat' })
+        });
+        const sdata = await sres.json();
+        if (sres.ok && sdata.id) {
+          setActiveSession(sdata.id);
+          loadSessions();
+        } else {
+          throw new Error('Could not initialize session');
+        }
+      } catch (e) {
+        thinkEl.remove();
+        addAgentMsg('Could not start a conversation session. Please check your connection to the Auth Server.', [], new Date().toLocaleTimeString(), false);
+        sending = false; document.getElementById('send-btn').disabled = false;
+        return;
+      } finally {
+        isInitializingSession = false;
+      }
+    }
+  }
+
   // Build payload — pass logged-in user's email as sender identity
-  const channels = USER?.channels || {};
-  const gmailConn = channels['GMAIL'];
   const body = {
     query: q,
-    // _user_email tells composio_agent WHO is the sender (which Gmail was OAuth'd)
+    session_id: activeSessionId,
     ...(USER?.email ? {_user_email: USER.email} : {}),
-    // _jwt_token lets composio_store persist connection state to MongoDB
-    ...(TOKEN && TOKEN !== 'demo-token' ? {_jwt_token: TOKEN} : {}),
-    // if Gmail is connected, auto-fill composio_app
-    ...(gmailConn ? {composio_app: 'GMAIL'} : {}),
+    ...(TOKEN ? {_jwt_token: TOKEN} : {}),
   };
 
   try {
@@ -582,8 +630,8 @@ async function send() {
     }
 
     // Save to history
-    await saveChat(q, data.result||'', agents, data.status||'completed', Object.keys(ctx));
-    await loadHistory();
+    await saveChat(q, data.result||'', agents, data.status||'completed', ctx);
+    await loadSessions(); // Refresh to update title if it was first message
 
   } catch(e) {
     thinkEl.remove();
@@ -632,12 +680,43 @@ function scrollMsgs() {
   m.scrollTop = m.scrollHeight;
 }
 
-function newChat() {
+async function newChat() {
+  if (isInitializingSession) return;
+  
+  // 1. Reset UI immediately for responsiveness
   document.getElementById('msgs').innerHTML = '';
   document.getElementById('chat-title').textContent = 'New query';
   document.getElementById('chat-sub').textContent = 'Ask anything to get started';
   document.getElementById('rp-ctx').innerHTML = '<div style="font-size:12px;color:var(--t3)">Run a query to see context</div>';
+  document.getElementById('q-input').value = '';
   document.getElementById('q-input').focus();
+  
+  const oldSessionId = activeSessionId;
+  setActiveSession(''); // Target send() to create one if background fails
+  
+  // 2. Proactively try to create a session in background
+  if (!TOKEN) return;
+  isInitializingSession = true;
+  try {
+    const sres = await fetch(`${AUTH_API}/me/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+      body: JSON.stringify({ title: 'New Chat' })
+    });
+    const sdata = await sres.json();
+    if (sres.ok && sdata.id) {
+      setActiveSession(sdata.id);
+      loadSessions();
+    } else {
+      // If failed, restore old session id if it was valid? 
+      // Actually, better to keep it empty so send() will try again
+      console.error('Failed to create session:', sdata);
+    }
+  } catch(e) {
+    console.warn('Background session init failed, will retry on message send:', e);
+  } finally {
+    isInitializingSession = false;
+  }
 }
 
 function agentName(url) {
@@ -660,52 +739,85 @@ function renderContext(ctx) {
   }).join('');
 }
 
-// ── History ──
-async function loadHistory() {
+// ── Sessions ──
+async function loadSessions() {
+  if (!TOKEN) return;
   const list = document.getElementById('history-list');
-  if (!TOKEN || TOKEN === 'demo-token') {
-    list.innerHTML = '<div style="font-size:12px;color:var(--t3);padding:4px 0">No history yet</div>';
-    return;
-  }
   try {
-    const r = await fetch(`${AUTH_API}/me/chats?limit=10`, {
+    const r = await fetch(`${AUTH_API}/me/sessions`, {
       headers: {'Authorization':`Bearer ${TOKEN}`},
     });
     if (!r.ok) return;
-    const chats = await r.json();
-    if (!chats.length) {
-      list.innerHTML = '<div style="font-size:12px;color:var(--t3);padding:4px 0">No history yet</div>';
+    const sessions = await r.json();
+    if (!sessions.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--t3);padding:4px 0">No sessions yet</div>';
       return;
     }
-    list.innerHTML = chats.map(c => {
-      const ts = new Date(c.created_at);
+    list.innerHTML = sessions.map(s => {
+      const active = s.id === activeSessionId ? 'on' : '';
+      const ts = new Date(s.updated_at);
       const ago = timeAgo(ts);
-      const ok  = c.status === 'completed';
-      return `<div class="ci-row" onclick="loadChat(${JSON.stringify(c).replace(/"/g,'&quot;')})">
-        <div class="cq">${esc(c.query)}</div>
-        <div class="cm"><div class="sdot2 ${ok?'ok':'fail'}"></div><span>${ago}</span></div>
+      return `<div class="ci-row ${active}" onclick="loadSession('${s.id}', '${esc(s.title)}')">
+        <div class="cq">${esc(s.title)}</div>
+        <div class="cm"><span>${ago}</span></div>
       </div>`;
     }).join('');
+    
+    // If we have an active session but msgs are empty, load it
+    if (activeSessionId && document.getElementById('msgs').children.length === 0) {
+      const activeS = sessions.find(s => s.id === activeSessionId);
+      if (activeS) loadSession(activeS.id, activeS.title);
+    }
   } catch(e) { /* silent */ }
 }
 
-function loadChat(c) {
-  document.getElementById('msgs').innerHTML = '';
-  document.getElementById('chat-title').textContent = c.query.length>45?c.query.slice(0,45)+'…':c.query;
-  document.getElementById('chat-sub').textContent = `${(c.agents_called||[]).length} agents · ${c.status}`;
-  const ts = new Date(c.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-  addMsg('user', c.query, ts);
-  if (c.result) addAgentMsg(c.result, c.agents_called||[], ts, c.status==='completed');
+async function loadSession(id, title) {
+  setActiveSession(id);
+  document.querySelectorAll('.ci-row').forEach(r => r.classList.remove('on'));
+  // Find the row and mark it on
+  loadSessions(); // lazy way to update UI classes
+
+  document.getElementById('msgs').innerHTML = '<div class="ma" style="justify-content:center;opacity:0.5;font-size:12px;margin:20px 0">Loading conversation...</div>';
+  document.getElementById('chat-title').textContent = title;
+  document.getElementById('chat-sub').textContent = 'loading history...';
+
+  try {
+    const r = await fetch(`${AUTH_API}/me/sessions/${id}/chats`, {
+      headers: {'Authorization':`Bearer ${TOKEN}`},
+    });
+    if (!r.ok) throw new Error('Failed to load chats');
+    const chats = await r.json();
+    document.getElementById('msgs').innerHTML = '';
+    
+    if (chats.length === 0) {
+        document.getElementById('chat-sub').textContent = 'Empty session';
+    } else {
+        chats.forEach(c => {
+            const time = new Date(c.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+            addMsg('user', c.query, time);
+            if (c.result) {
+                addAgentMsg(c.result, c.agents_called||[], time, c.status === 'completed');
+            }
+        });
+        const lastChat = chats[chats.length - 1];
+        document.getElementById('chat-sub').textContent = `${(lastChat.agents_called||[]).length} agents · ${lastChat.status}`;
+        renderContext(lastChat.context_data || {});
+    }
+  } catch(e) {
+    document.getElementById('msgs').innerHTML = `<div class="err">${e.message}</div>`;
+  }
 }
 
-async function saveChat(query, result, agents, status, ctxKeys) {
-  if (!TOKEN || TOKEN === 'demo-token') return;
+async function saveChat(query, result, agents, status, contextData) {
+  if (!TOKEN || !activeSessionId) {
+    return;
+  }
   try {
-    await fetch(`${AUTH_API}/me/chats`, {
+    const r = await fetch(`${AUTH_API}/me/chats`, {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`},
-      body: JSON.stringify({query, result, agents_called:agents, status, context_keys:ctxKeys}),
+      body: JSON.stringify({query, session_id: activeSessionId, result, agents_called:agents, status, context_data:contextData}),
     });
-  } catch(e) {}
+  } catch(e) { /* silent */ }
 }
 
 // ── Agents refresh ──
@@ -738,6 +850,26 @@ async function checkEntry() {
   } catch(e) {
     el.textContent = '● Offline';
     el.style.color = '#FF6B6B';
+  }
+}
+
+let lastAuthStatus = 'unknown';
+async function checkAuth() {
+  const el = document.getElementById('auth-status');
+  if (!el) return;
+  try {
+    const r = await fetch(`${AUTH_API}/health`);
+    const d = await r.json();
+    el.textContent = '● Online';
+    el.style.color = 'var(--tl)';
+    if (lastAuthStatus === 'offline' && TOKEN) {
+      loadSessions(); // Auto-reconnect sessions if server came back
+    }
+    lastAuthStatus = 'online';
+  } catch(e) {
+    el.textContent = '● Offline';
+    el.style.color = '#FF6B6B';
+    lastAuthStatus = 'offline';
   }
 }
 

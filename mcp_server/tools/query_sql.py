@@ -19,13 +19,17 @@ TOOL_SCHEMA = {
             "type": "string",
             "description": "The natural language question to answer from the database",
         },
+        "history": {
+            "type": "string",
+            "description": "Optional conversation history for context",
+        },
     },
     "required": ["natural_language_query"],
 }
 
 
 @mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
-async def handle(natural_language_query: str) -> dict:
+async def handle(natural_language_query: str, history: str = "") -> dict:
     settings = get_settings()
     db_path = getattr(settings, "chinook_db_path", None) or os.environ.get(
         "CHINOOK_DB_PATH", "/home/vidhiajmera/Desktop/multi-agent-system/data/chinook.db"
@@ -36,7 +40,7 @@ async def handle(natural_language_query: str) -> dict:
         sql_resp = await llm.chat.completions.create(
             model=settings.groq_model,
             messages=[
-                {"role": "system", "content": SQL_GENERATION_SYSTEM},
+                {"role": "system", "content": f"{SQL_GENERATION_SYSTEM}\n\nRecent History:\n{history}" if history else SQL_GENERATION_SYSTEM},
                 {"role": "user",   "content": natural_language_query},
             ],
             max_tokens=512,

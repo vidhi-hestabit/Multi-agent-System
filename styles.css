@@ -575,7 +575,19 @@ nav {
 
 .ci-row.on {
   background: var(--s3);
-  border: 1px solid var(--bd)
+  border: 1px solid var(--bd2);
+  position: relative;
+}
+
+.ci-row.on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10%;
+  height: 80%;
+  width: 3px;
+  background: var(--ac);
+  border-radius: 0 4px 4px 0;
 }
 
 .cq {

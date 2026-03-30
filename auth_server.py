@@ -28,10 +28,21 @@ class LoginRequest(BaseModel):
 
 class ChatSaveRequest(BaseModel):
     query: str
+    session_id: str
     result: str = ""
     agents_called: list[str] = []
     status: str = "completed"
-    context_keys: list[str] = []
+    context_data: dict = {}  # full context values
+
+class SessionCreateRequest(BaseModel):
+    title: str = "New Chat"
+
+class SessionResponse(BaseModel):
+    id: str
+    title: str
+    user_email: str
+    created_at: str
+    updated_at: str
 
 class ChannelUpdateRequest(BaseModel):
     channel: str
@@ -101,6 +112,8 @@ def create_app() -> FastAPI:
     async def startup():
         await db.users.create_index("email", unique=True)
         await db.chats.create_index([("user_email", 1), ("created_at", -1)])
+        await db.chats.create_index([("session_id", 1), ("created_at", 1)])
+        await db.sessions.create_index([("user_email", 1), ("updated_at", -1)])
         logger.info("Auth server indexes ensured")
 
     # Register
@@ -155,45 +168,98 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
         token = _create_token(user["composio_user_id"], req.email)
+        has_channels = len(user.get("channels", {})) > 0
         return {
             "token": token,
             "name": user["name"],
             "email": user["email"],
             "channels": user.get("channels", {}),
+            "has_channels": has_channels,
             "is_new": False,
         }
 
-    # Get chats (top 10)
-    @app.get("/me/chats")
-    async def get_chats(limit: int = 10, user: dict = Depends(_get_current_user)):
-        cursor = db.chats.find(
+    # Sessions
+    @app.get("/me/sessions")
+    async def get_sessions(user: dict = Depends(_get_current_user)):
+        cursor = db.sessions.find(
             {"user_email": user["email"]},
-            {"_id": 0},
-        ).sort("created_at", -1).limit(min(limit, 10))
-        return await cursor.to_list(length=10)
+        ).sort("updated_at", -1)
+        sessions = await cursor.to_list(length=100)
+        # Convert _id to id string
+        for s in sessions:
+            s["id"] = str(s.pop("_id"))
+        return sessions
 
-    # Save chat (enforce max 10)
+    @app.post("/me/sessions")
+    async def create_session(req: SessionCreateRequest, user: dict = Depends(_get_current_user)):
+        now = datetime.now(timezone.utc).isoformat()
+        session_doc = {
+            "user_email": user["email"],
+            "title": req.title,
+            "created_at": now,
+            "updated_at": now,
+        }
+        res = await db.sessions.insert_one(session_doc)
+        # Remove _id from session_doc as it is an ObjectId and cannot be serialized directly
+        session_doc.pop("_id", None)
+        return {"id": str(res.inserted_id), **session_doc}
+
+    @app.get("/me/sessions/{session_id}/chats")
+    async def get_session_chats(session_id: str, user: dict = Depends(_get_current_user)):
+        cursor = db.chats.find(
+            {"session_id": session_id, "user_email": user["email"]},
+            {"_id": 0},
+        ).sort("created_at", 1)
+        return await cursor.to_list(length=100)
+
+    # Get chats (last 10 days) - deprecated in favor of session-based chats
+    @app.get("/me/chats")
+    async def get_chats(days: int = 10, user: dict = Depends(_get_current_user)):
+        since = datetime.now(timezone.utc).timestamp() - (days * 86400)
+        since_iso = datetime.fromtimestamp(since, tz=timezone.utc).isoformat()
+        
+        cursor = db.chats.find(
+            {
+                "user_email": user["email"],
+                "created_at": {"$gte": since_iso}
+            },
+            {"_id": 0},
+        ).sort("created_at", -1)
+        return await cursor.to_list(length=100)
+
+    # Save chat
     @app.post("/me/chats")
     async def save_chat(req: ChatSaveRequest, user: dict = Depends(_get_current_user)):
+        now = datetime.now(timezone.utc).isoformat()
         chat_doc = {
             "user_email": user["email"],
+            "session_id": req.session_id,
             "query": req.query,
             "result": req.result,
             "agents_called": req.agents_called,
             "status": req.status,
-            "context_keys": req.context_keys,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "context_data": req.context_data,
+            "created_at": now,
         }
         await db.chats.insert_one(chat_doc)
-        count = await db.chats.count_documents({"user_email": user["email"]})
-        if count > 10:
-            overflow = count - 10
-            oldest = db.chats.find(
-                {"user_email": user["email"]},
-            ).sort("created_at", 1).limit(overflow)
-            ids_to_delete = [doc["_id"] async for doc in oldest]
-            if ids_to_delete:
-                await db.chats.delete_many({"_id": {"$in": ids_to_delete}})
+        
+        # Update session title if it's the first message and update timestamp
+        from bson import ObjectId
+        try:
+            session = await db.sessions.find_one({
+                "_id": ObjectId(req.session_id),
+                "user_email": user["email"]
+            })
+            if session:
+                update_data = {"updated_at": now}
+                if session.get("title") == "New Chat":
+                    # Truncate query for title
+                    title = req.query[:40] + "..." if len(req.query) > 40 else req.query
+                    update_data["title"] = title
+                await db.sessions.update_one({"_id": ObjectId(req.session_id)}, {"$set": update_data})
+        except Exception as e:
+            logger.error(f"Failed to update session: {e}")
+
         return {"ok": True}
 
     # Update channel

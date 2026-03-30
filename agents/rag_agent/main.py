@@ -4,7 +4,7 @@ import os
 import httpx
 import uvicorn
 from agents.base import BaseAgent
-from agents.llm_utils import ask_llm
+from agents.llm_utils import ask_llm, rewrite_query
 from common.config import get_settings
 from common.prompts.rag_prompts import _RAG_SYSTEM, RAG_FALLBACK_SYSTEM, RAG_FALLBACK_PREFIX
 
@@ -38,12 +38,15 @@ class RAGAgent(BaseAgent):
         }
 
     async def run(self, task_id: str, instruction: str, context: dict) -> dict:
-        chunks = await self._try_mcp(instruction)
+        history = context.get("history", "")
+        search_query = await rewrite_query(instruction, history)
+        
+        chunks = await self._try_mcp(search_query)
         if chunks:
             logger.info("RAGAgent: %d chunks from FAISS task=%s", len(chunks), task_id[:8])
             answer = await ask_llm(
                 _RAG_SYSTEM,
-                f"Question: {instruction}\n\nLegal excerpts:\n{chr(10).join(chunks)}\n\nAnswer:",
+                f"History:\n{history}\n\nQuestion: {instruction}\n\nLegal excerpts:\n{chr(10).join(chunks)}\n\nAnswer:",
                 max_tokens=800,
                 temperature=0.1,
             )

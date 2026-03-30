@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging, os, httpx, uvicorn
 from agents.base import BaseAgent
+from agents.llm_utils import rewrite_query
 
 logger = logging.getLogger(__name__)
 PORT   = int(os.environ.get("SQL_AGENT_PORT", 8005))
@@ -30,10 +31,16 @@ class SQLAgent(BaseAgent):
         }
 
     async def run(self, task_id: str, instruction: str, context: dict) -> dict:
+        history = context.get("history", "")
+        search_query = await rewrite_query(instruction, history)
+
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(f"{MCP}/tools/call", json={
                 "tool": "query_sql",
-                "arguments": {"natural_language_query": instruction},
+                "arguments": {
+                    "natural_language_query": search_query,
+                    "history": history
+                },
             })
             resp.raise_for_status()
         result = resp.json().get("result", {})

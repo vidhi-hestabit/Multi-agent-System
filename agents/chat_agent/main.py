@@ -37,12 +37,18 @@ class ChatAgent(BaseAgent):
 
     async def run(self, task_id: str, instruction: str, context: dict) -> dict:
         llm = AsyncGroq(api_key=settings.groq_api_key)
+        messages = [{"role": "system", "content": CHAT_SYSTEM}]
+        
+        # Add history if available
+        history = context.get("history")
+        if history:
+            messages.append({"role": "system", "content": f"Previous conversation history:\n{history}"})
+            
+        messages.append({"role": "user", "content": instruction})
+
         response = await llm.chat.completions.create(
             model=settings.groq_model,
-            messages=[
-                {"role": "system", "content": CHAT_SYSTEM},
-                {"role": "user",   "content": instruction},
-            ],
+            messages=messages,
             max_tokens=150,
             temperature=0.7,
         )

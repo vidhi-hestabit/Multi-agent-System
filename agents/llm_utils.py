@@ -3,6 +3,7 @@ import json
 import logging
 from groq import AsyncGroq
 from common.config import get_settings
+from common.prompts.query_prompts import QUERY_REWRITE_SYSTEM
 logger = logging.getLogger(__name__)
 
 def _settings():
@@ -49,3 +50,15 @@ async def ask_llm_json( system: str, user: str, max_tokens: int = 200) -> dict:
     except Exception:
         logger.exception("Failed to parse LLM JSON response")
         return {}
+
+async def rewrite_query(query: str, history: str) -> str:
+    if not history:
+        return query
+    try:
+        prompt = f"History:\n{history}\n\nQuery: {query}\nStandalone:"
+        rewritten = await ask_llm(QUERY_REWRITE_SYSTEM, prompt, max_tokens=100)
+        logger.info("Rewrote query: %r -> %r", query, rewritten)
+        return rewritten
+    except Exception as e:
+        logger.warning("Query rewrite failed, using original: %s", e)
+        return query
