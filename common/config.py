@@ -58,9 +58,9 @@ class Settings(BaseSettings):
 
     # Composio Auth Config IDs 
     composio_gmail_auth_config_id: str = ""
-    composio_slack_auth_config_id: str = ""
-    composio_telegram_auth_config_id: str = ""
-    composio_discord_auth_config_id: str = ""
+    # composio_slack_auth_config_id: str = ""
+    # composio_telegram_auth_config_id: str = ""
+    # composio_discord_auth_config_id: str = ""
     composio_whatsapp_auth_config_id: str = ""
 
     # System

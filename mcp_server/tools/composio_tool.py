@@ -26,9 +26,9 @@ def _get_auth_config_id(slug: str) -> str:
     settings = get_settings()
     mapping = {
         "gmail":    getattr(settings, "composio_gmail_auth_config_id", ""),
-        "slack":    getattr(settings, "composio_slack_auth_config_id", ""),
-        "telegram": getattr(settings, "composio_telegram_auth_config_id", ""),
-        "discord":  getattr(settings, "composio_discord_auth_config_id", ""),
+        # "slack":    getattr(settings, "composio_slack_auth_config_id", ""),
+        # "telegram": getattr(settings, "composio_telegram_auth_config_id", ""),
+        # "discord":  getattr(settings, "composio_discord_auth_config_id", ""),
         "whatsapp": getattr(settings, "composio_whatsapp_auth_config_id", ""),
     }
     return mapping.get(slug, "")
