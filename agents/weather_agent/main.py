@@ -38,7 +38,11 @@ class WeatherAgent(BaseAgent):
 
     async def run(self, task_id: str, instruction: str, context: dict) -> dict:
         city = await ask_llm(CITY_EXTRACTION_SYSTEM, instruction, max_tokens=20)
-        city = city.strip().strip("\"'.").title() or "Delhi"
+        city = city.strip().strip("\"'.").upper()
+        if not city or city == "NONE":
+            logger.info("WeatherAgent: No city mentioned in instruction. Skipping.")
+            return {"weather_data": {}, "weather_data_text": "No city mentioned for weather query.", "city_name": "Delhi"}
+        city = city.title()
         logger.info("WeatherAgent: city=%r (from LLM)", city)
 
         # Verify MCP is reachable

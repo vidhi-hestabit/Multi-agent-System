@@ -117,12 +117,9 @@ class ReportAgent(BaseAgent):
         sections = _collect_report_sections(context)
         data_block = "\n\n".join(sections).strip() or "No meaningful context data was available."
 
-        # Generate title dynamically
-        title_prompt = (
-            f"User request: {instruction}\n"
-            f"Available context keys: "
-            f"{', '.join(k for k in context if context.get(k) not in (None, '', [], {}))}"
-        )
+        # Generate title dynamically based ONLY on context keys (not user instruction)
+        keys_summary = ", ".join(k for k in context if context.get(k) not in (None, "", [], {}))
+        title_prompt = f"Available content categories: {keys_summary}"
         title = (
             await ask_llm(TITLE_GENERATION_SYSTEM, title_prompt, max_tokens=25)
         ).strip().strip("\"'.") or "Generated Report"
