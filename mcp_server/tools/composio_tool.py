@@ -1,7 +1,9 @@
 from __future__ import annotations
-import asyncio, os
+import asyncio, os, typing as t
+import logging
 from functools import partial
 from pathlib import Path
+import traceback
 from common.config import get_settings
 from common.errors import MCPError
 from mcp_server.app import mcp
@@ -73,6 +75,54 @@ def _patch_composio_http():
 
 _patch_composio_http()
 
+# --- Monkey-patch Composio SDK for 'type' KeyError fix ---
+try:
+    from composio.core.models._files import FileHelper, FileDownloadable
+    
+    def _patched_substitute_file_downloads_recursively(
+        self,
+        tool, # Tool
+        schema: t.Dict,
+        request: t.Dict,
+    ) -> t.Dict:
+        if "properties" not in schema:
+            return request
+
+        params = schema["properties"]
+        for _param in request:
+            if _param not in params:
+                continue
+
+            if self._is_file_downloadable(schema=params[_param]):
+                request[_param] = str(
+                    FileDownloadable(**request[_param]).download(
+                        self._outdir / tool.toolkit.slug / tool.slug
+                    )
+                )
+                continue
+
+            if "anyOf" in params[_param]:
+                obj = self._find_file_downloadable_from_any_of(params[_param]["anyOf"])
+                if obj is None:
+                    continue
+                params[_param] = obj
+
+            # FIX: Use .get("type") instead of ["type"] to handle schemas with $ref
+            if isinstance(request[_param], dict) and params[_param].get("type") == "object":
+                request[_param] = self._substitute_file_downloads_recursively(
+                    schema=params[_param],
+                    request=request[_param],
+                    tool=tool,
+                )
+                continue
+
+        return request
+
+    FileHelper._substitute_file_downloads_recursively = _patched_substitute_file_downloads_recursively
+    logging.getLogger(__name__).info("Composio SDK monkey-patch (KeyError: 'type' fix) applied.")
+except Exception as patch_exc:
+    logging.getLogger(__name__).warning("Failed to apply Composio monkey-patch: %s", patch_exc)
+
 
 def _get_client(api_key: str):
     _configure_cache()
@@ -137,20 +187,20 @@ def _connect_sync(api_key: str, app: str, user_id: str) -> dict:
 
     # Get auth_config_id for this app
     auth_config_id = _get_auth_config_id(slug)
-    if not auth_config_id:
-        raise MCPError(
-            f"No auth config ID for {slug}. "
-            f"Set COMPOSIO_{slug.upper()}_AUTH_CONFIG_ID in .env.local. ",
-            tool=TOOL_NAME,
-        )
 
     # Initiate connection
     try:
-        req = client.connected_accounts.initiate(
-            user_id=user_id,
-            auth_config_id=auth_config_id,
-            allow_multiple=True,
-        )
+        if auth_config_id:
+            req = client.connected_accounts.initiate(
+                user_id=user_id,
+                auth_config_id=auth_config_id,
+                allow_multiple=True,
+            )
+        else:
+            req = client.toolkits.authorize(
+                user_id=user_id,
+                toolkit=slug,
+            )
     except Exception as exc:
         err_str = str(exc)
         if "Multiple connected accounts" in err_str or "MultipleConnected" in err_str:
@@ -183,6 +233,21 @@ def _execute_sync(api_key: str, action: str, user_id: str, params: dict) -> dict
             dangerously_skip_version_check=True,
         )
     except Exception as exc:
+        err_str = str(exc)
+        logger = logging.getLogger(__name__)
+        logger.error("Composio execution failed: %s", err_str, exc_info=True)
+        # If connection is missing, try to initiate and return URL
+        if any(msg in err_str.lower() for msg in ["no active accounts", "no connected account", "no connection", "no account", "authenticat", "failed"]):
+            logger.info("Matched connection error keywords. Initiating connect...")
+            try:
+                # Extract app name from action (e.g. SLACK_SEND_MESSAGE -> slack)
+                app_name = action.split("_")[0].lower()
+                conn = _connect_sync(api_key, app_name, user_id)
+                if not conn.get("connected") and conn.get("oauth_url"):
+                    return {"success": False, "connected": False, "oauth_url": conn["oauth_url"], 
+                            "message": f"Please connect {app_name} first:\n{conn['oauth_url']}"}
+            except Exception as e:
+                logger.error("Auto-connect failed: %s", e)
         raise MCPError(f"Action {action} failed: {exc}", tool=TOOL_NAME) from exc
 
     # ToolExecutionResponse object

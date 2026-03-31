@@ -61,5 +61,8 @@ async def handle(app: str, user_id: str, to: str, body: str, subject: str = "") 
     if result.get("success"):
         return {"success": True, "app": app_upper, "to": to,
                 "message": f"Message sent via {app_upper} to {to}."}
-
-    raise MCPError(f"Failed sending via {app_upper}: {result.get('error','unknown')}", tool=TOOL_NAME)
+    
+    if result.get("oauth_url") or not result.get("connected", True):
+        return result
+    
+    raise MCPError(f"Failed sending via {app_upper}: {result.get('error', 'unknown')}", tool=TOOL_NAME)

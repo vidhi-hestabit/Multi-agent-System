@@ -56,13 +56,6 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str = ""
     whatsapp_composio_entity_id: str = ""
 
-    # Composio Auth Config IDs 
-    composio_gmail_auth_config_id: str = ""
-    composio_slack_auth_config_id: str = ""
-    composio_telegram_auth_config_id: str = ""
-    composio_discord_auth_config_id: str = ""
-    composio_whatsapp_auth_config_id: str = ""
-
     # System
     mcp_transport: str
     log_level: str
