@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = "nexus_whatsapp_verify"
     whatsapp_phone_number_id: str = ""
     whatsapp_composio_entity_id: str = ""
+    composio_whatsapp_auth_config_id: str = ""
 
     # System
     mcp_transport: str
