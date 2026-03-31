@@ -43,7 +43,7 @@ _model = settings.groq_model
 class QueryRequest(BaseModel):
     query: str
     session_id: str = ""  # ID for the conversation session
-    _user_email: str = ""  # email from auth session
+    user_email: str = ""  # email from auth session
     
     # Optional direct hints — injected into context before resolver runs
     composio_app: str = ""         # e.g. GMAIL | SLACK | TELEGRAM | DISCORD
@@ -106,19 +106,21 @@ def create_app() -> FastAPI:
         logger.info("Created task %s required=%s", task_id[:8], required)
 
         hints: dict[str, str] = {}
-        if req._user_email:
-            hints["_user_email"] = req._user_email
+        if req.user_email:
+            hints["user_email"] = req.user_email
             
             # Fetch session history if session_id is provided
             if req.session_id:
                 try:
                     db = get_db()
-                    logger.info("Fetching history for session=%s email=%s", req.session_id, req._user_email)
+                    logger.info("Fetching history for session=%s email=%s", req.session_id, req.user_email)
                     cursor = db.chats.find({
                         "session_id": req.session_id,
-                        "user_email": req._user_email
-                    }).sort("created_at", 1)
+                        "user_email": req.user_email
+                    }).sort("created_at", -1)
                     history_docs = await cursor.to_list(length=20)
+                    # Reverse so they are in chronological order for the LLM
+                    history_docs.reverse()
                     
                     if history_docs:
                         logger.info("Found %d previous chats in session", len(history_docs))
@@ -135,13 +137,24 @@ def create_app() -> FastAPI:
                         
                         if prev_ctx:
                             logger.info("Keys in found context: %s", list(prev_ctx.keys()))
-                            keys_to_skip = {"chat", "composio_app", "history", "_user_email"}
-                            restore_ctx = {k:v for k,v in prev_ctx.items() if k not in keys_to_skip}
+                            keys_to_skip = {
+                                "chat", "composio_app", "history", "user_email",
+                                "report_markdown", "news_summary", "weather_data_text",
+                                "sql_answer", "rag_answer", "message_sent_confirmation"
+                            }
+                            restore_ctx = {}
+                            for k, v in prev_ctx.items():
+                                if k in keys_to_skip: continue
+                                # Don't restore failed message confirmations
+                                if k == "message_sent_confirmation" and ("failed" in str(v).lower() or "not connected" in str(v).lower()):
+                                    continue
+                                restore_ctx[k] = v
+
                             if restore_ctx:
                                 logger.info("Restoring keys from session: %s", list(restore_ctx.keys()))
                                 store.update_context(task_id, restore_ctx)
                             else:
-                                logger.info("No reusable keys found in session context (all were skipped)")
+                                logger.info("No reusable keys found in session context (all were skipped or failed)")
                         else:
                             logger.info("No history document has context_data")
                     else:
@@ -152,14 +165,14 @@ def create_app() -> FastAPI:
                 # Fallback: Fetch last 5 global chats for this user (legacy/global context)
                 try:
                     db = get_db()
-                    cursor = db.chats.find({"user_email": req._user_email}).sort("created_at", -1).limit(5)
+                    cursor = db.chats.find({"user_email": req.user_email}).sort("created_at", -1).limit(5)
                     history_docs = await cursor.to_list(length=5)
                     if history_docs:
                         history_str = "\n".join([f"User: {c['query']}\nNexus: {c['result']}" for c in reversed(history_docs)])
                         hints["history"] = history_str
                         prev_ctx = history_docs[0].get("context_data", {})
                         if prev_ctx:
-                            keys_to_skip = {"chat", "composio_app", "history", "_user_email"}
+                            keys_to_skip = {"chat", "composio_app", "history", "user_email"}
                             restore_ctx = {k:v for k,v in prev_ctx.items() if k not in keys_to_skip}
                             if restore_ctx:
                                 store.update_context(task_id, restore_ctx)

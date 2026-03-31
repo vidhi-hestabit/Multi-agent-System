@@ -72,7 +72,7 @@ class ComposioAgent(BaseAgent):
     async def run(self, task_id: str, instruction: str, context: dict) -> dict:
         delivery = await ask_llm_json(DELIVERY_SYSTEM, instruction, max_tokens=80)
         app = (
-            context.get("composio_app") or delivery.get("app", "") or DEFAULT_APP
+            delivery.get("app", "") or context.get("composio_app") or DEFAULT_APP
         ).upper()
 
         # ── Reliable WhatsApp recipient extraction (regex beats LLM here) ──
@@ -84,9 +84,9 @@ class ComposioAgent(BaseAgent):
             logger.info("ComposioAgent: regex-extracted WhatsApp recipient=%r", recipient)
         else:
             recipient = (
-                context.get("composio_recipient")
+                delivery.get("recipient", "")
+                or context.get("composio_recipient")
                 or context.get("email_recipient")
-                or delivery.get("recipient", "")
                 or DEFAULT_RECIPIENT
             )
 
@@ -102,7 +102,7 @@ class ComposioAgent(BaseAgent):
         )
         subject = await self._make_subject(context, instruction)
         sender_email = (
-            context.get("_user_email")
+            context.get("user_email")
             or context.get("composio_recipient")
             or "default"
         )

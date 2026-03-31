@@ -33,7 +33,7 @@ async def _resolve(task_id: str) -> None:
 
     # All done 
     if not remaining:
-        result = _pick_result(task["context"])
+        result = _pick_result(task["context"], required)
         store.complete(task_id, result)
         logger.info("Task %s  →  COMPLETED", task_id[:8])
         return
@@ -156,16 +156,21 @@ async def _call_agent(task_id: str, card: dict) -> None:
 
     await resolve_and_trigger(task_id)
 
-def _pick_result(context: dict) -> str:
+def _pick_result(context: dict, required: set[str] | list[str]) -> str:
     for key in (
         "chat",
         "message_sent_confirmation",
         "report_markdown",
         "news_summary",
-        "weather_data_text",
-        "sql_answer",
         "rag_answer",
+        "sql_answer",
+        "weather_data_text",
     ):
-        if context.get(key):
+        if key in required and context.get(key):
             return str(context[key])
+    
+        for key in ("chat","message_sent_confirmation","report_markdown","news_summary","rag_answer","sql_answer","weather_data_text"):
+            if context.get(key):
+                return str(context[key])
+
     return str(context)
