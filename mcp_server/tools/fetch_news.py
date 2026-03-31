@@ -41,8 +41,13 @@ async def handle(query: str, language: str = "en", page_size: int = 5) -> list[N
         raise MCPError("NEWS_API_KEY is not configured in .env", tool=TOOL_NAME)
 
     url = "https://newsdata.io/api/1/news"
+    # Sanitize query to prevent 422 Unprocessable Entity
+    sanitized_query = query.split("\n")[0].strip()
+    if len(sanitized_query) > 40:
+        sanitized_query = sanitized_query[:40].strip()
+
     params = {
-        "q": query,
+        "q": sanitized_query,
         "language": language,
         "size": page_size,
         "apikey": api_key,

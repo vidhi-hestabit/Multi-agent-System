@@ -48,7 +48,9 @@ class NewsAgent(BaseAgent):
     async def run(self, task_id: str, instruction: str, context: dict) -> dict:
         topic = context.get("city_name") or (
             await ask_llm(TOPIC_EXTRACTION_SYSTEM, instruction, max_tokens=30)
-        ).strip().strip("\"'.")
+        ).split("\n")[0].strip().strip("\"'.")
+        if len(topic) > 40:
+            topic = topic[:40].strip()
 
         logger.info("NewsAgent task=%s topic=%r", task_id[:8], topic)
 
