@@ -198,9 +198,10 @@ async def handle_logic(phone_number: str, message: str, user_id: str = "") -> di
             return {
                 "success":   False,
                 "connected": False,
-                "message":   f"WhatsApp session '{user_id}' is not connected. Scan the QR code to link.",
+                "message":   f"⚠️ WhatsApp not connected for '{user_id}'. Please scan the QR code to link your account.",
+                "instruction": "1. Open WhatsApp on your phone\n2. Go to Settings > Linked Devices\n3. Tap 'Link a Device' and scan the code.",
                 "qr_code":   qr_data.get("qr") if qr_data.get("status") == "qr" else None,
-                "oauth_url": connect_url, # Re-use oauth_url for UI redirection if needed
+                "oauth_url": connect_url, 
                 "connect_url": connect_url,
             }
 

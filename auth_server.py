@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import logging
+import asyncio
 from datetime import datetime, timezone
 import bcrypt
 import jwt
@@ -11,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from common.config import get_settings
 from common.db import get_db
+from common.vector_store import get_vector_store
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -206,42 +208,36 @@ def create_app() -> FastAPI:
 
     @app.get("/me/sessions/{session_id}/chats")
     async def get_session_chats(session_id: str, user: dict = Depends(_get_current_user)):
-        cursor = db.chats.find(
-            {"session_id": session_id, "user_email": user["email"]},
-            {"_id": 0},
-        ).sort("created_at", 1)
-        return await cursor.to_list(length=100)
+        vs = get_vector_store()
+        return await vs.get_session_history(session_id)
 
-    # Get chats (last 10 days) - deprecated in favor of session-based chats
     @app.get("/me/chats")
     async def get_chats(days: int = 10, user: dict = Depends(_get_current_user)):
-        since = datetime.now(timezone.utc).timestamp() - (days * 86400)
-        since_iso = datetime.fromtimestamp(since, tz=timezone.utc).isoformat()
-        
-        cursor = db.chats.find(
-            {
-                "user_email": user["email"],
-                "created_at": {"$gte": since_iso}
-            },
-            {"_id": 0},
-        ).sort("created_at", -1)
-        return await cursor.to_list(length=100)
+        # Deprecated: returning empty for now as we transition to session-only
+        return []
 
     # Save chat
     @app.post("/me/chats")
     async def save_chat(req: ChatSaveRequest, user: dict = Depends(_get_current_user)):
         now = datetime.now(timezone.utc).isoformat()
-        chat_doc = {
-            "user_email": user["email"],
-            "session_id": req.session_id,
-            "query": req.query,
-            "result": req.result,
-            "agents_called": req.agents_called,
-            "status": req.status,
-            "context_data": req.context_data,
-            "created_at": now,
-        }
-        await db.chats.insert_one(chat_doc)
+        # chat_doc and MongoDB insert removed as we only use Pinecone for chat storage
+        # await db.chats.insert_one(chat_doc)
+        
+        # Upsert into Pinecone for both long-term semantic memory and primary storage
+        from common.vector_store import get_vector_store
+        vs = get_vector_store()
+        asyncio.create_task(vs.upsert_session(
+            user_email=user["email"],
+            session_id=req.session_id,
+            query=req.query,
+            result=req.result,
+            metadata={
+                "agents_called": req.agents_called,
+                "status": req.status,
+                "created_at": now,
+                "context_data": req.context_data # Store context data for restoration
+            }
+        ))
         
         # Update session title if it's the first message and update timestamp
         from bson import ObjectId

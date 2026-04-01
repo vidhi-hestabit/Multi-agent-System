@@ -1,8 +1,17 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env.local') });
 const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
+const { 
+    default: makeWASocket, 
+    fetchLatestBaileysVersion, 
+    DisconnectReason,
+    AuthenticationState,
+    SignalDataTypeMap,
+    initAuthCreds,
+    BufferJSON
+} = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const axios = require('axios');
-const fs = require('fs');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 app.use(express.json());
@@ -14,20 +23,95 @@ const instances = {};
 // Logger
 const logger = pino({ level: 'silent' });
 
+// ----------------------------------------------------
+// MongoDB Auth State Implementation
+// ----------------------------------------------------
+
+async function useMongoDBAuthState(instanceName) {
+    const client = new MongoClient(process.env.MONGODB_URL);
+    await client.connect();
+    const db = client.db(process.env.MONGODB_DB || 'multi-agent-system');
+    const collection = db.collection('whatsapp_sessions');
+
+    const writeData = async (data, id) => {
+        return collection.updateOne(
+            { instanceName, id },
+            { $set: { data: JSON.stringify(data, BufferJSON.replacer) } },
+            { upsert: true }
+        );
+    };
+
+    const readData = async (id) => {
+        try {
+            const res = await collection.findOne({ instanceName, id });
+            return res ? JSON.parse(res.data, BufferJSON.reviver) : null;
+        } catch (error) {
+            return null;
+        }
+    };
+
+    const removeData = async (id) => {
+        try {
+            await collection.deleteOne({ instanceName, id });
+        } catch (error) {
+            logger.error(`Error removing data ${id}: ${error}`);
+        }
+    };
+
+    const creds = await readData('creds') || initAuthCreds();
+
+    return {
+        state: {
+            creds,
+            keys: {
+                get: async (type, ids) => {
+                    const data = {};
+                    await Promise.all(
+                        ids.map(async (id) => {
+                            let value = await readData(`${type}-${id}`);
+                            if (type === 'app-state-sync-key' && value) {
+                                value = BufferJSON.fromJSON(value);
+                            }
+                            data[id] = value;
+                        })
+                    );
+                    return data;
+                },
+                set: async (data) => {
+                    const tasks = [];
+                    for (const category in data) {
+                        for (const id in data[category]) {
+                            const value = data[category][id];
+                            const key = `${category}-${id}`;
+                            tasks.push(value ? writeData(value, key) : removeData(key));
+                        }
+                    }
+                    await Promise.all(tasks);
+                }
+            }
+        },
+        saveCreds: () => writeData(creds, 'creds'),
+        close: () => client.close()
+    };
+}
+
+// ----------------------------------------------------
+// Instance Management
+// ----------------------------------------------------
+
 async function createInstance(instanceName) {
     if (instances[instanceName]) return;
 
-    console.log(`[Baileys] Creating instance: ${instanceName}`);
+    console.log(`[Baileys] Creating instance: ${instanceName} (MongoDB Storage)`);
     
-    const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${instanceName}`);
+    const { state, saveCreds, close } = await useMongoDBAuthState(instanceName);
     const { version } = await fetchLatestBaileysVersion();
     
-    // Create socket
     const sock = makeWASocket({
         version,
         auth: state,
         logger,
-        printQRInTerminal: true, // Also prints to terminal for debugging
+        printQRInTerminal: true,
         browser: ["Nexus MAS", "Chrome", "10.0.0"]
     });
 
@@ -35,10 +119,10 @@ async function createInstance(instanceName) {
         name: instanceName,
         sock,
         qr: null,
-        connectionState: 'connecting'
+        connectionState: 'connecting',
+        mongoClose: close
     };
 
-    // Connection Events
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
@@ -57,14 +141,22 @@ async function createInstance(instanceName) {
             console.log(`[Baileys] ${instanceName} closed. Reconnecting: ${shouldReconnect}`);
             
             if (shouldReconnect) {
-                // Remove socket and recreate logic
                 setTimeout(() => {
-                    delete instances[instanceName];
+                    if (instances[instanceName]) {
+                        if (instances[instanceName].mongoClose) instances[instanceName].mongoClose();
+                        delete instances[instanceName];
+                    }
                     createInstance(instanceName);
                 }, 5000);
             } else {
-                // Logged out
-                fs.rmSync(`./sessions/${instanceName}`, { recursive: true, force: true });
+                // Logged out: clean MongoDB
+                const client = new MongoClient(process.env.MONGODB_URL);
+                client.connect().then(async () => {
+                    const db = client.db(process.env.MONGODB_DB || 'multi-agent-system');
+                    await db.collection('whatsapp_sessions').deleteMany({ instanceName });
+                    client.close();
+                });
+                if (instances[instanceName].mongoClose) instances[instanceName].mongoClose();
                 delete instances[instanceName];
             }
         } 
@@ -73,38 +165,37 @@ async function createInstance(instanceName) {
             instances[instanceName].connectionState = 'open';
             instances[instanceName].qr = null;
             
-            // Fire webhook
             axios.post(WEBHOOK_URL, {
                 event: 'connection.update',
                 instance: instanceName,
                 data: { state: 'open', statusReason: 200 }
-            }).catch(e => console.log('Webhook error on open'));
+            }).catch(e => {});
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Messages Webhook
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
-        console.log(`[Baileys] ${instanceName} received message from ${msg.key.remoteJid}`);
+        console.log(`[Baileys] ${instanceName} received message`);
         
-        // Fire webhook
         axios.post(WEBHOOK_URL, {
             event: 'messages.upsert',
             instance: instanceName,
             data: { message: msg }
-        }).catch(e => console.log('Webhook error on message'));
+        }).catch(e => {});
     });
 }
 
+// Ensure instances are loaded on startup if they were already connected?
+// For now, they load on demand via /instance/create or first message.
+
 // ----------------------------------------------------
-// Mock Evolution API Endpoints
+// API Endpoints
 // ----------------------------------------------------
 
-// /instance/fetchInstances
 app.get('/instance/fetchInstances', (req, res) => {
     const list = Object.keys(instances).map(name => ({
         instance: { instanceName: name }
@@ -112,7 +203,6 @@ app.get('/instance/fetchInstances', (req, res) => {
     res.json(list);
 });
 
-// /instance/create
 app.post('/instance/create', async (req, res) => {
     const { instanceName } = req.body;
     if (instanceName) {
@@ -121,7 +211,6 @@ app.post('/instance/create', async (req, res) => {
     res.json({ status: 'SUCCESS' });
 });
 
-// /instance/connect/:instanceMap
 app.get('/instance/connect/:instanceName', (req, res) => {
     const inst = instances[req.params.instanceName];
     if (!inst) return res.json({ count: 0 });
@@ -137,7 +226,6 @@ app.get('/instance/connect/:instanceName', (req, res) => {
     res.json({ count: 0 });
 });
 
-// /instance/connectionState/:instanceName
 app.get('/instance/connectionState/:instanceName', (req, res) => {
     const inst = instances[req.params.instanceName];
     if (!inst) return res.json({ instance: { state: 'close' } });
@@ -145,7 +233,6 @@ app.get('/instance/connectionState/:instanceName', (req, res) => {
     res.json({ instance: { state: inst.connectionState } });
 });
 
-// /message/sendText/:instanceName
 app.post('/message/sendText/:instanceName', async (req, res) => {
     const inst = instances[req.params.instanceName];
     if (!inst || inst.connectionState !== 'open') {
@@ -163,6 +250,25 @@ app.post('/message/sendText/:instanceName', async (req, res) => {
     }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Baileys Server] Evolution API mocking proxy running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', async () => {
+    console.log(`[Baileys Server] MongoDB-backed proxy running on port ${PORT}`);
+    
+    // Auto-load existing instances from MongoDB
+    try {
+        const client = new MongoClient(process.env.MONGODB_URL);
+        await client.connect();
+        const db = client.db(process.env.MONGODB_DB || 'multi-agent-system');
+        const collection = db.collection('whatsapp_sessions');
+        
+        const uniqueInstances = await collection.distinct('instanceName');
+        console.log(`[Baileys] Found ${uniqueInstances.length} sessions in MongoDB. Restoring...`);
+        
+        for (const name of uniqueInstances) {
+            createInstance(name).catch(err => console.error(`Failed to restore ${name}:`, err));
+        }
+        await client.close();
+    } catch (err) {
+        console.error('Failed to auto-load instances:', err);
+    }
 });
+

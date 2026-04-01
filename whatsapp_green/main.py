@@ -246,6 +246,33 @@ def health():
     return {"status": "ok", "service": "evolution-api-gateway"}
 
 
+@app.get("/success", response_class=HTMLResponse)
+def success_page():
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Connected – Nexus AI</title>
+      <style>
+        body { font-family: sans-serif; text-align: center; padding: 100px; background: #0f172a; color: white; }
+        .success-card { background: #1e293b; padding: 40px; border-radius: 20px; max-width: 400px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h1 { color: #25D366; }
+        p { color: #94a3b8; line-height: 1.6; }
+        .btn { display: inline-block; margin-top: 24px; padding: 12px 24px; background: #25D366; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; }
+      </style>
+    </head>
+    <body>
+      <div class="success-card">
+        <h1>✅ Connected!</h1>
+        <p>Your WhatsApp has been successfully linked.<br>You can now close this window and start chatting with the agent.</p>
+        <a href="javascript:window.close()" class="btn">Close Window</a>
+      </div>
+    </body>
+    </html>
+    """)
+
+
 # ─────────────────────────────────────────────────────────────────────
 # QR page HTML (no form — instant QR)
 # ─────────────────────────────────────────────────────────────────────
@@ -257,44 +284,74 @@ def _qr_page(user_id: str) -> str:
   <meta charset="utf-8">
   <title>Connect WhatsApp – Nexus AI</title>
   <style>
-    body {{ font-family: sans-serif; text-align: center; padding: 40px; background: #f0f4f8; }}
-    h2   {{ color: #1a202c; }}
-    #qr-box {{ margin: 30px auto; width: 280px; min-height: 280px;
-               background: white; border-radius: 12px; padding: 20px;
-               box-shadow: 0 4px 12px rgba(0,0,0,.1); }}
-    #qr-box img {{ width: 240px; height: 240px; }}
-    #status {{ margin-top: 16px; font-size: 14px; color: #666; }}
-    .connected {{ color: #22c55e; font-weight: bold; font-size: 18px; }}
+    :root {{ --primary: #25D366; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 20px; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }}
+    .container {{ max-width: 420px; width: 100%; }}
+    .card {{ background: var(--card); border-radius: 24px; padding: 40px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05); }}
+    h1 {{ font-size: 28px; margin: 0 0 12px 0; font-weight: 800; letter-spacing: -0.5px; }}
+    p {{ color: #94a3b8; margin: 0 0 32px 0; font-size: 16px; line-height: 1.5; }}
+    #qr-box {{ 
+      background: white; border-radius: 20px; padding: 20px;
+      margin: 0 auto; width: fit-content;
+      position: relative;
+    }}
+    #qr-img {{ width: 240px; height: 240px; display: block; border-radius: 12px; }}
+    #loader {{
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      border: 4px solid #f3f3f3; border-top: 4px solid var(--primary);
+      border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;
+    }}
+    @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+    #status {{ margin-top: 24px; font-size: 14px; color: #64748b; font-weight: 500; min-height: 20px; }}
+    .session-id {{ margin-top: 40px; font-size: 12px; color: #475569; letter-spacing: 1px; text-transform: uppercase; }}
   </style>
 </head>
 <body>
-  <h2>🔗 Connect WhatsApp to Nexus AI</h2>
-  <p>Scan the QR code below with your WhatsApp app</p>
-  <div id="qr-box">
-    <img id="qr-img" src="" alt="Loading QR..." />
-    <p id="status">Loading...</p>
+  <div class="container">
+    <div class="card" id="main-content">
+      <h1>Link WhatsApp</h1>
+      <p>Scan the QR code with WhatsApp on your phone to link your account.</p>
+      <div id="qr-box">
+        <div id="loader"></div>
+        <img id="qr-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" />
+      </div>
+      <div id="status">Generating secure QR...</div>
+    </div>
+    <div class="session-id">Session: {user_id}</div>
   </div>
-  <p style="color:#999;font-size:12px;">Session ID: {user_id}</p>
 
   <script>
+    let connected = false;
     async function refresh() {{
-      const res  = await fetch('/qr/{user_id}');
-      const data = await res.json();
+      if (connected) return;
+      try {{
+        const res  = await fetch('/qr/{user_id}');
+        const data = await res.json();
 
-      if (data.status === 'connected') {{
-        document.getElementById('qr-box').innerHTML =
-          '<p class="connected">✅ WhatsApp Connected!<br>You can start sending queries.</p>';
-        return;
-      }}
+        if (data.status === 'connected') {{
+          connected = true;
+          document.getElementById('main-content').innerHTML = `
+            <div style="padding: 20px 0;">
+              <div style="font-size: 64px; margin-bottom: 24px;">✅</div>
+              <h1 style="color: var(--primary);">Connected!</h1>
+              <p>Success! Your WhatsApp is now linked.<br>Redirecting you now...</p>
+            </div>
+          `;
+          setTimeout(() => {{ window.location.href = '/success'; }}, 2000);
+          return;
+        }}
 
-      if (data.status === 'qr' && data.qr) {{
-        document.getElementById('qr-img').src = 'data:image/png;base64,' + data.qr;
-        document.getElementById('status').textContent = 'Scan with WhatsApp → Linked Devices → Link a Device';
-      }} else {{
-        document.getElementById('status').textContent =
-          'Waiting for QR... (' + (data.status || 'pending') + ')';
+        if (data.status === 'qr' && data.qr) {{
+          document.getElementById('qr-img').src = 'data:image/png;base64,' + data.qr;
+          document.getElementById('loader').style.display = 'none';
+          document.getElementById('status').textContent = 'Menu > Linked Devices > Link a Device';
+        }} else if (data.status === 'pending') {{
+            document.getElementById('status').textContent = 'Evolution API is initializing...';
+        }}
+      }} catch (e) {{
+          console.error("Refresh error:", e);
       }}
-      setTimeout(refresh, 8000);  // refresh every 8s
+      setTimeout(refresh, 5000);
     }}
     refresh();
   </script>
