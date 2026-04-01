@@ -46,3 +46,17 @@ class OrchestratorResponse(BaseModel):
     results: list[AgentResult]
     summary: str
     generated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WhatsAppInstance(BaseModel):
+    #     """Stores one Green API instance per user."""
+    # user_id: str                         # unique user identifier
+    # instance_id: str                     # Green API idInstance
+    # token: str                           # Green API apiTokenInstance
+    # connected: bool = False              # True after QR scan
+    """Stores one Baileys/Evolution API instance per user."""
+    user_id: str                           # unique user identifier (used as instance name)
+    connected: bool = False                # True after QR scan
+    whatsapp_number: Optional[str] = None  # linked phone number (filled after connect)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

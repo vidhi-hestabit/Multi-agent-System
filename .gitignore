@@ -7,3 +7,7 @@ __pycache__/
 .pytest_cache/
 notes.md
 .composio-cache
+# WhatsApp Baileys Local Auth & Dependencies
+whatsapp_baileys/node_modules/
+whatsapp_baileys/sessions/
+

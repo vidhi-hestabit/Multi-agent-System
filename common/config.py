@@ -80,10 +80,14 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_whatsapp_from: str = "whatsapp:+14155238886"  # Twilio sandbox default
 
-    # Green API (Baileys-based WhatsApp)
+    # Green API (Baileys-based WhatsApp) — kept for reference
     green_api_instance_id: str = ""
     green_api_token: str = ""
     green_api_gateway_port: int = 8031
+
+    # Evolution API (self-hosted Baileys — preferred)
+    evolution_api_url: str = "http://localhost:8080"
+    evolution_api_key: str = "nexus_secret_key"
 
 
     @property
