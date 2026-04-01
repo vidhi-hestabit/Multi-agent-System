@@ -17,7 +17,7 @@ MCP = settings.mcp_server_url
 
 DEFAULT_APP = getattr(settings, "default_composio_app", "GMAIL")
 DEFAULT_RECIPIENT = getattr(settings, "default_email_recipient", "")
-CONTENT_KEYS = ["report_markdown", "news_summary", "weather_data_text", "sql_answer", "rag_answer"]
+CONTENT_KEYS = ["report_markdown", "news_summary", "weather_data_text", "sql_answer", "rag_answer", "chat"]
 
 
 class ComposioAgent(BaseAgent):
@@ -100,7 +100,7 @@ class ComposioAgent(BaseAgent):
         content = next(
             (str(context[k]) for k in CONTENT_KEYS if context.get(k)), instruction
         )
-        subject = await self._make_subject(context, instruction)
+        subject = await self._make_subject(context, instruction, content)
         sender_email = (
             context.get("user_email")
             or context.get("composio_recipient")
@@ -147,7 +147,7 @@ class ComposioAgent(BaseAgent):
         logger.info("ComposioAgent: %s", msg)
         return {"message_sent_confirmation": msg}
 
-    async def _make_subject(self, context: dict, instruction: str) -> str:
+    async def _make_subject(self, context: dict, instruction: str, content: str) -> str:
         if context.get("report_title"):
             return context["report_title"]
 
@@ -162,10 +162,15 @@ class ComposioAgent(BaseAgent):
             available.append("legal research result")
         if context.get("weather_data_text"):
             available.append("weather data")
+        if context.get("chat"):
+            available.append("chat response")
+        if context.get("report_markdown"):
+            available.append("formal report")
 
         prompt = (
             f"User request: {instruction}\n"
-            f"Content: {', '.join(available) or 'general result'}\n"
+            f"Available context categories: {', '.join(available) or 'general'}\n"
+            f"Content snippet: {content[:200]}...\n\n"
             "Write a short professional subject line (max 8 words). Return ONLY the subject."
         )
         try:

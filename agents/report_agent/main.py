@@ -61,7 +61,7 @@ def _format_dict(value: dict[str, Any]) -> str:
             lines.append(f"| {_pretty_label(str(k))} | {_format_scalar(v)} |")
         return "\n".join(lines)
     pretty = json.dumps(value, indent=2, ensure_ascii=False)
-    return f"```json\n{pretty}\n```"
+    return f"json\n{pretty}\n"
 
 
 def _format_value(value: Any) -> str:
@@ -100,6 +100,7 @@ class ReportAgent(BaseAgent):
                 "weather_data_text",
                 "sql_answer",
                 "rag_answer",
+                "chat",
             ],
             "produces": ["report_markdown", "report_title"],
             "capabilities": {"streaming": False},
@@ -119,7 +120,7 @@ class ReportAgent(BaseAgent):
 
         # Generate title dynamically based ONLY on context keys (not user instruction)
         keys_summary = ", ".join(k for k in context if context.get(k) not in (None, "", [], {}))
-        title_prompt = f"Available content categories: {keys_summary}"
+        title_prompt = f"User Request: {instruction}\nAvailable content categories: {keys_summary}"
         title = (
             await ask_llm(TITLE_GENERATION_SYSTEM, title_prompt, max_tokens=25)
         ).strip().strip("\"'.") or "Generated Report"
