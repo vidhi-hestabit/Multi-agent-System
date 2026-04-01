@@ -65,7 +65,11 @@ class Settings(BaseSettings):
     app_env: str
     request_timeout: int
     max_retries: int
-
+    
+    # Pinecone
+    pinecone_api_key: str = ""
+    pinecone_index_name: str = "nexus-sessions"
+    pinecone_dimension: int = 384 # for all-MiniLM-L6-v2
     # MongoDB & Auth
     mongodb_url: str = ""
     mongodb_db: str = "multi-agent-system"
