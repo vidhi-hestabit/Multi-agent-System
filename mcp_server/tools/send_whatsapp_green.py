@@ -181,8 +181,14 @@ async def handle_logic(phone_number: str, message: str, user_id: str = "") -> di
                 json={"number": number, "text": message},
             )
         body = resp.json()
+    except httpx.ConnectError:
+        raise MCPError(
+            f"Could not connect to Baileys server at {evo_url}. "
+            "Please ensure 'node index.js' is running in the 'whatsapp_baileys' folder.",
+            tool=TOOL_NAME
+        )
     except Exception as exc:
-        raise MCPError(f"Evolution API request failed: {exc}", tool=TOOL_NAME)
+        raise MCPError(f"WhatsApp Proxy request failed: {exc}", tool=TOOL_NAME)
 
     if resp.status_code not in (200, 201):
         # ── Handle Disconnected Instance ──

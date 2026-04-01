@@ -60,6 +60,8 @@ async def handle(query: str, language: str = "en", page_size: int = 5) -> list[N
                 raise MCPError(f"Query '{query}' returned no results", tool=TOOL_NAME)
             response.raise_for_status()
             data = response.json()
+        except httpx.ConnectError:
+            raise MCPError("Could not connect to NewsData.io. Please check your internet connection.", tool=TOOL_NAME)
         except httpx.HTTPError as e:
             raise MCPError(f"HTTP error while fetching news: {str(e)}", tool=TOOL_NAME)
 
