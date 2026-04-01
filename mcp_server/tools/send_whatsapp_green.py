@@ -106,12 +106,60 @@ async def _resolve_recipient(value: str, user_id: str, evo_url: str, evo_key: st
     return number
 
 
+async def _ensure_instance(evo_url: str, evo_key: str, user_id: str) -> bool:
+    """Ensure an Evolution API instance exists for the user."""
+    try:
+        headers = {"apikey": evo_key, "Content-Type": "application/json"}
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(f"{evo_url}/instance/fetchInstances", headers=headers)
+            data = r.json() if r.status_code == 200 else {}
+            # Handle both list and nested dict responses
+            instances = data if isinstance(data, list) else data.get("instances", [])
+            if any(i.get("instance", {}).get("instanceName") == user_id or i.get("name") == user_id for i in instances):
+                return True
+            
+            # Create new instance if missing
+            await client.post(
+                f"{evo_url}/instance/create",
+                headers=headers,
+                json={"instanceName": user_id, "qrcode": True, "integration": "WHATSAPP-BAILEYS"}
+            )
+            return True
+    except Exception as exc:
+        logger.error("Failed to ensure instance %s: %s", user_id, exc)
+        return False
+
+
+async def _fetch_qr(evo_url: str, evo_key: str, user_id: str) -> dict:
+    """Fetch connection QR or state from Evolution API."""
+    try:
+        headers = {"apikey": evo_key}
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(f"{evo_url}/instance/connect/{user_id}", headers=headers)
+            body = r.json()
+            if body.get("base64"):
+                b64 = body["base64"]
+                if b64.startswith("data:"):
+                    b64 = b64.split(",", 1)[-1]
+                return {"status": "qr", "qr": b64}
+            if (body.get("instance") or {}).get("state") == "open":
+                return {"status": "connected"}
+    except Exception as exc:
+        logger.error("Failed to fetch QR for %s: %s", user_id, exc)
+    return {"status": "failed"}
+
+
 @mcp.tool(name=TOOL_NAME, description=TOOL_DESCRIPTION)
 async def handle(phone_number: str, message: str, user_id: str = "") -> dict:
     """
     Send a WhatsApp message. phone_number = number or contact name.
     user_id = Evolution API instance name (= user's session).
     """
+    return await handle_logic(phone_number, message, user_id)
+
+
+async def handle_logic(phone_number: str, message: str, user_id: str = "") -> dict:
+    """Core logic for sending WhatsApp message."""
     settings = get_settings()
     evo_url  = settings.evolution_api_url.rstrip("/")
     evo_key  = settings.evolution_api_key
@@ -137,6 +185,25 @@ async def handle(phone_number: str, message: str, user_id: str = "") -> dict:
         raise MCPError(f"Evolution API request failed: {exc}", tool=TOOL_NAME)
 
     if resp.status_code not in (200, 201):
+        # ── Handle Disconnected Instance ──
+        # Evolution API returns 400 {'error': 'Instance not connected'}
+        if resp.status_code == 400 and "not connected" in str(body).lower():
+            logger.info("Instance %s not connected. Attempting to fetch QR.", user_id)
+            await _ensure_instance(evo_url, evo_key, user_id)
+            qr_data = await _fetch_qr(evo_url, evo_key, user_id)
+            
+            gateway_url = f"http://localhost:{getattr(settings, 'green_api_gateway_port', 8031)}"
+            connect_url = f"{gateway_url}/connect/{user_id}"
+
+            return {
+                "success":   False,
+                "connected": False,
+                "message":   f"WhatsApp session '{user_id}' is not connected. Scan the QR code to link.",
+                "qr_code":   qr_data.get("qr") if qr_data.get("status") == "qr" else None,
+                "oauth_url": connect_url, # Re-use oauth_url for UI redirection if needed
+                "connect_url": connect_url,
+            }
+
         raise MCPError(
             f"Evolution API returned {resp.status_code}: {body}",
             tool=TOOL_NAME,

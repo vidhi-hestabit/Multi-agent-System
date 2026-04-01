@@ -29,7 +29,7 @@ async def handle(app: str, user_id: str, to: str, body: str, subject: str = "") 
                 "GREEN_API_INSTANCE_ID not set. Add it to .env.local",
                 tool=TOOL_NAME,
             )
-        result = await green_handle(phone_number=to, message=body)
+        result = await green_handle(phone_number=to, message=body, user_id=user_id)
         if result.get("success"):
             return {"success": True, "app": "WHATSAPP_GREEN", "to": to,
                     "message": f"WhatsApp message sent to {to} via Green API."}
