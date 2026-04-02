@@ -49,7 +49,7 @@ The absolute perimeter for physical world interaction. `server.py` implements Mo
   - `fetch_news` (`tools/fetch_news.py`): Executes structured queries against NewsData.io REST API.
   - `query_sql` (`tools/query_sql.py`): Direct SQLite database interface with agent synthesis.
   - `query_rag` (`tools/query_rag.py`): Performs Top-K semantic search against data chunks.
-  - `composio_tool` (`tools/composio_tool.py`): Complex webhook and OAuth redirect implementation mapping to Composio Platform configurations, Slack, Discord, Green API (WhatsApp), and standard email bindings.
+  - `composio_tool` (`tools/composio_tool.py`): Complex webhook and OAuth redirect implementation mapping to Composio Platform configurations, Slack, Green API (WhatsApp), and standard email bindings.
 
 ### 2.3 Shared Common Module
 Distributed architecture requires highly rigid shared standards. This code block is imported by *all components* at runtime:

@@ -25,7 +25,7 @@ class ComposioAgent(BaseAgent):
     def agent_card(self) -> dict:
         return {
             "name": "Composio Agent",
-            "description": "Sends content via Gmail, Slack, Telegram, or Discord.",
+            "description": "Sends content via Gmail, Slack.",
             "url": f"http://{HOST}:{PORT}",
             "version": "1.0.0",
             "protocolVersion": "0.3.0",
@@ -38,7 +38,7 @@ class ComposioAgent(BaseAgent):
                 {
                     "id": "send_via_composio",
                     "name": "Send Message",
-                    "tags": ["gmail", "slack", "telegram", "discord", "email"],
+                    "tags": ["gmail", "slack", "email"],
                 }
             ],
         }
@@ -123,7 +123,7 @@ class ComposioAgent(BaseAgent):
             logger.info("ComposioAgent (Green API): %s", msg)
             return {"message_sent_confirmation": msg}
 
-        # ── Composio OAuth flow for Gmail/Slack/Telegram/Discord ──────
+        # ── Composio OAuth flow for Gmail/Slack ──────
         connect = await self._mcp_connect(app, user_id)
         if not connect.get("connected"):
             oauth_url = connect.get("oauth_url", "")

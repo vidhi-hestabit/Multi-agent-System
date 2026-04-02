@@ -81,22 +81,7 @@
         </div>
         <div class="cd">Post updates to any Slack channel automatically.</div>
       </div>
-      <!-- <div class="cc" id="cc-TELEGRAM" onclick="connectChannel('TELEGRAM',this)">
-        <div class="cc-hd">
-          <div class="ci" style="background:rgba(0,136,204,.13)">✈️</div>
-          <div class="cn">Telegram</div>
-        </div>
-        <div class="cd">Send messages and files to your Telegram chats.</div>
-      </div> -->
-      <div class="cc" id="cc-DISCORD" onclick="connectChannel('DISCORD',this)">
-        <div class="cc-hd">
-          <div class="ci" style="background:rgba(88,101,242,.13)">🎮</div>
-          <div class="cn">Discord</div>
-        </div>
-        <div class="cd">Post to Discord channels and servers.</div>
-      </div>
-        <!-- <div class="cd">Send messages to any WhatsApp number.</div> -->
-      </div>
+     </div>
     </div>
     <div class="cr">
       <button class="sbtn" style="width:auto;padding:11px 28px" onclick="showPage('dash')">Continue →</button>
@@ -390,7 +375,6 @@ function logout() {
 const CHANNELS = {
   GMAIL:    {icon:'📧', bg:'rgba(234,67,53,.13)'},
   SLACK:    {icon:'💬', bg:'rgba(74,21,75,.3)'},
-  DISCORD:  {icon:'🎮', bg:'rgba(88,101,242,.13)'},
 };
 
 function renderSetupChannels() {

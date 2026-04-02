@@ -3,14 +3,13 @@
 
 DELIVERY_SYSTEM: str = """Extract delivery details from the user's message.
 Return JSON with exactly these keys:
-  "app":       one of GMAIL, SLACK, TELEGRAM, DISCORD, WHATSAPP_GREEN
+  "app":       one of GMAIL, SLACK, WHATSAPP_GREEN
   "recipient": email address, phone number (digits only), #channel, chat_id, or "" if not mentioned
 
 Rules:
 - "email", "gmail", "mail" → GMAIL; recipient = email address
 - "slack"                  → SLACK; recipient = #channel name
 - "telegram"               → TELEGRAM; recipient = chat_id
-- "discord"                → DISCORD; recipient = channel_id
 - "whatsapp" + a name or phone number → WHATSAPP_GREEN; recipient = the name or phone exactly as given (do NOT invent or hallucinate a phone number if a name is given — pass the name as-is)
 - Nothing mentioned        → GMAIL
 
