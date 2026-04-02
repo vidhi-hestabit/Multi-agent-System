@@ -15,6 +15,7 @@ from agents.registry import registry
 from agents.resolver import resolve_and_trigger
 from common.config import get_settings
 from common.db import get_db
+from common.vector_store import get_vector_store
 from common.prompts.entry_prompts import ALL_OUTPUT_KEYS, PLANNER_SYSTEM
 
 logger = logging.getLogger(__name__)
@@ -122,19 +123,27 @@ def create_app() -> FastAPI:
             if req.session_id:
                 try:
                     db = get_db()
-                    logger.info("Fetching history for session=%s email=%s", req.session_id, req.user_email)
-                    cursor = db.chats.find({
-                        "session_id": req.session_id,
-                        "user_email": req.user_email
-                    }).sort("created_at", -1)
-                    history_docs = await cursor.to_list(length=20)
-                    # Reverse so they are in chronological order for the LLM
-                    history_docs.reverse()
+                    # Fetch linear session history from Pinecone (replaces MongoDB)
+                    vs = get_vector_store()
+                    history_docs = await vs.get_session_history(req.session_id)
                     
-                    if history_docs:
-                        logger.info("Found %d previous chats in session", len(history_docs))
-                        history_str = "\n".join([f"User: {c['query']}\nNexus: {c['result']}" for c in history_docs])
-                        hints["history"] = history_str
+                    # Also fetch relevant semantic context from ALL previous chats across all sessions
+                    # Perform async search
+                    semantic_context = await vs.query_context(user_email=req.user_email, query=req.query)
+                    
+                    if history_docs or semantic_context:
+                        logger.info("Found %d previous chats + semantic search results from Pinecone", len(history_docs))
+                        
+                        linear_history = "\n".join([f"User: {c['query']}\nNexus: {c['result']}" for c in history_docs])
+                        
+                        full_history = ""
+                        if semantic_context:
+                            full_history += f"Relevant background from previous conversations:\n{semantic_context}\n\n"
+                        
+                        if linear_history:
+                            full_history += f"Recent session history:\n{linear_history}"
+                            
+                        hints["history"] = full_history.strip()
                         
                         # Restore previous context data from the latest message that HAS context
                         prev_ctx = {}
