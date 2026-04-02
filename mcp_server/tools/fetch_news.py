@@ -53,17 +53,19 @@ async def handle(query: str, language: str = "en", page_size: int = 5) -> list[N
         "apikey": api_key,
     }
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.get(url, params=params)
             if response.status_code == 404:
                 raise MCPError(f"Query '{query}' returned no results", tool=TOOL_NAME)
             response.raise_for_status()
             data = response.json()
+        except httpx.ReadTimeout:
+            raise MCPError("The NewsData API took too long to respond. Please try again later.", tool=TOOL_NAME)
         except httpx.ConnectError:
             raise MCPError("Could not connect to NewsData.io. Please check your internet connection.", tool=TOOL_NAME)
         except httpx.HTTPError as e:
-            raise MCPError(f"HTTP error while fetching news: {str(e)}", tool=TOOL_NAME)
+            raise MCPError(f"HTTP error while fetching news: {e.__class__.__name__} {str(e)}", tool=TOOL_NAME)
 
     if data.get("status") != "success":
         raise MCPError(
