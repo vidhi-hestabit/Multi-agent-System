@@ -108,7 +108,7 @@
 <!-- DASHBOARD PAGE -->
 <div class="page" id="p-dash">
   <!-- sidebar -->
-  <div class="sb">
+  <div class="sb" id="side-left">
     <div class="sbs"><button class="ncb" onclick="newChat()">+ New query</button></div>
     <div class="sbs sbl">Chat history</div>
     <div class="sbscroll" id="history-list"></div>
@@ -134,6 +134,8 @@
       </div>
     </div>
   </div>
+
+  <div class="resizer" id="resizer-left"></div>
 
   <!-- main chat -->
   <div class="main">
@@ -163,8 +165,10 @@
     </div>
   </div>
 
+  <div class="resizer" id="resizer-right"></div>
+
   <!-- right panel -->
-  <div class="rp">
+  <div class="rp" id="side-right">
     <div class="rps" style="margin-bottom: 12px;">
       <div class="rpl">Telegram Bot</div>
       <button onclick="window.open('https://t.me/mcp_vc_bot', '_blank')" style="width:100%;margin-top:8px;padding:9px;background:rgba(0,136,204,.1);border:1px solid rgba(0,136,204,.3);border-radius:var(--r2);color:var(--t);font-size:12px;cursor:pointer;font-family:var(--fn);transition:background .15s" onmouseover="this.style.background='rgba(0,136,204,.2)'" onmouseout="this.style.background='rgba(0,136,204,.1)'">
@@ -200,6 +204,47 @@
     </div>
   </div>
 </div>
+
+<script>
+const initResizers = () => {
+  const setupResizer = (resizerId, sideId, isLeft) => {
+    const resizer = document.getElementById(resizerId);
+    const side = document.getElementById(sideId);
+    if (!resizer || !side) return;
+
+    // Load saved width
+    const saved = localStorage.getItem(`nexus_resizer_${resizerId}`);
+    if (saved) side.style.width = saved;
+
+    resizer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      document.body.classList.add('resizing');
+      const startX = e.clientX;
+      const startWidth = side.offsetWidth;
+
+      const onMouseMove = (e) => {
+        let delta = isLeft ? (e.clientX - startX) : (startX - e.clientX);
+        let newWidth = Math.max(180, Math.min(600, startWidth + delta));
+        side.style.width = `${newWidth}px`;
+      };
+
+      const onMouseUp = () => {
+        document.body.classList.remove('resizing');
+        localStorage.setItem(`nexus_resizer_${resizerId}`, side.style.width);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    });
+  };
+
+  setupResizer('resizer-left', 'side-left', true);
+  setupResizer('resizer-right', 'side-right', false);
+};
+initResizers();
+</script>
 
 <!-- OAUTH MODAL -->
 <div class="modal-overlay" id="oauth-modal">

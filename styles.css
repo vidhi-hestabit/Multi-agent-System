@@ -939,7 +939,7 @@ nav {
 
 /* rp */
 .rp {
-  width: 268px;
+  width: 280px;
   flex-shrink: 0;
   border-left: 1px solid var(--bd);
   background: var(--surface);
@@ -949,6 +949,25 @@ nav {
   position: sticky;
   top: 56px;
   overflow-y: auto
+}
+
+.resizer {
+  width: 5px;
+  cursor: col-resize;
+  flex-shrink: 0;
+  z-index: 10;
+  transition: background 0.2s;
+  background: transparent;
+}
+
+.resizer:hover, .resizing .resizer {
+  background: var(--ac);
+  opacity: 0.5;
+}
+
+.resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .rps {
