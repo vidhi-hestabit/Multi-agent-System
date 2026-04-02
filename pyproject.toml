@@ -36,6 +36,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "motor>=3.7.1",
     "python-telegram-bot>=22.7",
+    "pinecone>=8.1.0",
 ]
 
 [dependency-groups]
