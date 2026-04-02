@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from common.config import get_settings
 from common.db import get_db
+from common.vector_store import get_vector_store
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -206,11 +207,10 @@ def create_app() -> FastAPI:
 
     @app.get("/me/sessions/{session_id}/chats")
     async def get_session_chats(session_id: str, user: dict = Depends(_get_current_user)):
-        cursor = db.chats.find(
-            {"session_id": session_id, "user_email": user["email"]},
-            {"_id": 0},
-        ).sort("created_at", 1)
-        return await cursor.to_list(length=100)
+        vs = get_vector_store()
+        history = await vs.get_session_history(session_id)
+        # Match the expected schema for the frontend
+        return history
 
     # Get chats (last 10 days) - deprecated in favor of session-based chats
     @app.get("/me/chats")
@@ -241,8 +241,29 @@ def create_app() -> FastAPI:
             "context_data": req.context_data,
             "created_at": now,
         }
-        await db.chats.insert_one(chat_doc)
-        
+
+        # Sync with Pinecone for vector similarity
+        try:
+            vs = get_vector_store()
+            # Prepare metadata including context data for restoration
+            keys_to_skip = {"chat", "history", "user_email"}
+            clean_context = {k: v for k, v in req.context_data.items() if k not in keys_to_skip}
+            
+            await vs.upsert_session(
+                user_email=user["email"],
+                session_id=req.session_id,
+                query=req.query,
+                result=req.result,
+                metadata={
+                    "agents_called": req.agents_called,
+                    "status": req.status,
+                    "context_data": clean_context
+                }
+            )
+            logger.info("Synced interaction to Pinecone session=%s", req.session_id)
+        except Exception as e:
+            logger.error("Failed to sync to Pinecone: %s", e)
+
         # Update session title if it's the first message and update timestamp
         from bson import ObjectId
         try:

@@ -213,6 +213,31 @@ def create_app() -> FastAPI:
             if status in ("done", "failed")
         ]
 
+        # Save to Pinecone if successful and session_id/user_email are present
+        if task["final_status"] == "completed" and req.user_email and req.session_id:
+            try:
+                vs = get_vector_store()
+                # Prepare metadata including context data for restoration
+                # We exclude temporary or agent-specific outputs to keep context clean
+                context = store.get_context(task_id)
+                keys_to_skip = {"chat", "history", "user_email"}
+                clean_context = {k: v for k, v in context.items() if k not in keys_to_skip}
+                
+                await vs.upsert_session(
+                    user_email=req.user_email,
+                    session_id=req.session_id,
+                    query=req.query,
+                    result=task.get("result", ""),
+                    metadata={
+                        "agents_called": agents_called,
+                        "status": "completed",
+                        "context_data": clean_context
+                    }
+                )
+                logger.info("Saved interaction to Pinecone session=%s", req.session_id)
+            except Exception as e:
+                logger.error("Failed to save to Pinecone: %s", e)
+
         return QueryResponse(
             task_id=task_id,
             status=task["final_status"],
