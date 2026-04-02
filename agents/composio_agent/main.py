@@ -101,13 +101,19 @@ class ComposioAgent(BaseAgent):
             (str(context[k]) for k in CONTENT_KEYS if context.get(k)), instruction
         )
         subject = await self._make_subject(context, instruction)
-        sender_email = (
-            context.get("user_email")
-            or context.get("composio_recipient")
-            or "default"
-        )
-        stable_seed = f"{app}:{sender_email}"
-        user_id = "mas_" + hashlib.md5(stable_seed.encode()).hexdigest()[:16]
+        # Generate a unique and persistent user_id (Baileys instance name)
+        # STRICT REQUIREMENT: Only use MongoDB User ID. No fallbacks.
+        user_id = context.get("user_id")
+        
+        if not user_id:
+            msg = "Missing MongoDB User ID. You must be logged in to send WhatsApp messages."
+            logger.error("ComposioAgent: %s", msg)
+            return {"message_sent_confirmation": msg}
+            
+        # Ensure it starts with mas_ for Baileys naming convention
+        if not user_id.startswith("mas_"):
+            user_id = f"mas_{user_id}"
+
         logger.info(
             "ComposioAgent task=%s app=%s recipient=%s user_id=%s",
             task_id[:8], app, recipient, user_id,
@@ -117,9 +123,26 @@ class ComposioAgent(BaseAgent):
         if app in ("WHATSAPP_GREEN", "GREEN"):
             send = await self._mcp_send(app, user_id, recipient, subject, content)
             if send.get("success"):
-                msg = f"WhatsApp message sent to '{recipient}' via Green API."
-            else:
-                msg = f"WhatsApp (Green API) send failed: {send.get('error', 'unknown')}"
+                msg = f"WhatsApp message sent to '{recipient}'."
+                return {"message_sent_confirmation": msg}
+            
+            if send.get("connected") is False:
+                connect_url = send.get("connect_url") or send.get("oauth_url")
+                msg = (
+                    f"⚠️ **WhatsApp Not Connected**\n\n"
+                    f"Your Nexus WhatsApp session (`{user_id}`) is not linked yet.\n\n"
+                    f"👉 **[Click here to scan the QR code]({connect_url})**\n\n"
+                    "Once scanned, you can try your request again!"
+                )
+                logger.info("ComposioAgent (Green API): session not connected. Returning onboarding link.")
+                return {
+                    "message_sent_confirmation": msg,
+                    "qr_code": send.get("qr_code"),
+                    "connect_url": connect_url,
+                    "connected": False
+                }
+
+            msg = f"WhatsApp (Green API) send failed: {send.get('error', 'unknown')}"
             logger.info("ComposioAgent (Green API): %s", msg)
             return {"message_sent_confirmation": msg}
 

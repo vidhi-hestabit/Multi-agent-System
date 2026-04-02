@@ -108,6 +108,15 @@ def create_app() -> FastAPI:
         hints: dict[str, str] = {}
         if req.user_email:
             hints["user_email"] = req.user_email
+            # Fetch user_id from MongoDB
+            try:
+                db = get_db()
+                u = await db.users.find_one({"email": req.user_email})
+                if u:
+                    hints["user_id"] = str(u["_id"])
+                    logger.info("Found MongoDB user_id=%s for email=%s", hints["user_id"], req.user_email)
+            except Exception as e:
+                logger.warning("Failed to lookup user_id for %s: %s", req.user_email, e)
             
             # Fetch session history if session_id is provided
             if req.session_id:
