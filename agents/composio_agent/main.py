@@ -129,9 +129,9 @@ class ComposioAgent(BaseAgent):
             if send.get("connected") is False:
                 connect_url = send.get("connect_url") or send.get("oauth_url")
                 msg = (
-                    f"⚠️ **WhatsApp Not Connected**\n\n"
+                    f" **WhatsApp Not Connected**\n\n"
                     f"Your Nexus WhatsApp session (`{user_id}`) is not linked yet.\n\n"
-                    f"👉 **[Click here to scan the QR code]({connect_url})**\n\n"
+                    f" **[Click here to scan the QR code]({connect_url})**\n\n"
                     "Once scanned, you can try your request again!"
                 )
                 logger.info("ComposioAgent (Green API): session not connected. Returning onboarding link.")

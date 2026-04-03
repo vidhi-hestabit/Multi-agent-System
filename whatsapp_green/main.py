@@ -268,7 +268,7 @@ def _qr_page(user_id: str) -> str:
   </style>
 </head>
 <body>
-  <h2>🔗 Connect WhatsApp to Nexus AI</h2>
+  <h2> Connect WhatsApp to Nexus AI</h2>
   <p>Scan the QR code below with your WhatsApp app</p>
   <div id="qr-box">
     <img id="qr-img" src="" alt="Loading QR..." />
@@ -283,7 +283,7 @@ def _qr_page(user_id: str) -> str:
 
       if (data.status === 'connected') {{
         document.getElementById('qr-box').innerHTML =
-          '<p class="connected">✅ WhatsApp Connected!<br>You can start sending queries.</p>';
+          '<p class="connected"> WhatsApp Connected!<br>You can start sending queries.</p>';
         return;
       }}
 

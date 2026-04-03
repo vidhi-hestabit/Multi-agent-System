@@ -1,213 +1,146 @@
-# Multi-agent System
-A production-ready multi-agent AI system built on the **A2A (Agent-to-Agent) protocol** and **MCP (Model Context Protocol)**. Agents collaborate dynamically to answer queries — fetching weather, news, generating reports, querying databases, answering legal questions, and sending messages via Gmail/Slack.
+# Nexus Multi-Agent System
 
-## Architecture of system -
+A production-ready Multi-Agent AI system built on the **A2A (Agent-to-Agent) protocol** and **MCP (Model Context Protocol)**. 
+Nexus agents collaborate dynamically to execute complex multi-step queries: fetching weather, summarizing news, writing reports, running SQL database queries, performing semantic searches for legal queries (RAG), and sending external messages via Gmail, Slack, and WhatsApp.
 
-[Go to architecture file](Architecture.md)
+---
 
-## Flow 
+##  System Architecture
 
- user query => `entry agent` (Blackboard at port 8010 )-> To read/write context
-                |
-            LLM  plans output required
-                |
-            creates task in InMemoryTaskStore
-                |
-            fires resolver
-                | 
-            => `Resolver Reads Registry`
-                |
-            checks which agents are eligible to run (requirements met, produces needed)
-                |
-            calls agents via JSON RPC2.0 POST/
-                |
-            => `Each Agent`
-                |
-            Reads context from Entry Agent via GET/tasks/{id}/context
-                |
-            entry agent reruns resolver
-                |
-            next eligible agent fires automatically 
+The project is built on three main execution pillars:
+1. **Persistent Storage & Context**: MongoDB-backed session metadata and chat history, paired with Pinecone for dense vector semantic history retrieval.
+2. **Intelligent Orchestration**: An **Entry Agent** (the planner) that creates an implicit DAG of task dependencies based on the user's intent.
+3. **Context-Aware Workers**: Specialized micro-service agents that resolve ambiguous queries using Blackboard memory injection.
 
-## Agents & Ports
+---
 
-| Agent | Port | What it does |
+##  Agents & Ports
+
+| Component | Port | What it does |
 |---|---|---|
-| MCP Server | 8000 | Tool gateway — weather, news, composio, SQL, RAG |
-| News Agent | 8001 | Fetches & summarizes news via NewsData.io |
-| Weather Agent | 8002 | Fetches current weather via OpenWeatherMap |
-| Report Agent | 8003 | Generates Markdown reports from context |
-| SQL Agent | 8005 | Answers Chinook music database questions |
-| RAG Agent | 8006 | Answers Indian law questions via FAISS |
-| Composio Agent | 8008 | Sends content via Gmail/Slack/ |
-| Entry Agent | 8010 | Coordinator — task store, resolver, LLM planner |
+| **MCP Server** | 8000 | Centralized Tool gateway expose file operations, specific integrations, etc. |
+| **News Agent** | 8001 | Fetches & summarizes news via NewsData.io |
+| **Weather Agent** | 8002 | Fetches multi-city current weather via OpenWeatherMap |
+| **Report Agent** | 8003 | Generates structured Markdown reports from the Blackboard context |
+| **SQL Agent** | 8005 | Natural-language query converter for the Chinook Music SQL database |
+| **RAG Agent** | 8006 | Legal document semantic search agent (via local FAISS index) |
+| **Chat Agent** | 8009 | Context-aware general conversational agent |
+| **Composio Agent**| 8008 | Omnichannel messaging pipeline (Gmail, Slack, Telegram, WhatsApp) |
+| **Entry Agent** | 8010 | The master coordinator — houses the Task Store, Resolver, and Planner |
+| **Auth Server** | 8020 | Manages JWTs, frontend sessions, and persists context onto MongoDB & Pinecone |
+| **Baileys Node** | 8080 | Headless Baileys native WhatsApp driver mimicking the Evolution API |
 
-## Get your API keys here:
+---
 
-Groq LLM: https://console.groq.com/keys
+##  Setup & Execution
 
-NewsData.io: https://newsdata.io/search-dashboard
+### Prerequisites
+1. Install Python `uv` package manager. 
+2. Ensure you have MongoDB running locally (`mongodb://localhost:27017` or Atlas).
+3. Populate `.env.local` with your API keys (Groq, Composio, Pinecone, OpenWeatherMap, NewsData.io).
 
-OpenWeatherMap: https://home.openweathermap.org/api_keys
-
-Composio: https://app.composio.dev
-
-## To perform local setup :
-
-Run : 
-
-- uv sync --dev
-
-- source .venv/bin/activate
-
-## Terminal 1 — MCP Server (start first)
+### Development (Local Run)
+Install dependencies using `uv`:
+```bash
+uv sync --dev
+source .venv/bin/activate
+```
+Instead of Docker, you can run individual microservices in separate terminals:
+```bash
+#  Tool Gateway
 uv run python -m mcp_server.main
 
-## Terminal 2 — Weather Agent
+#  Workers (run individually)
 uv run python -m agents.weather_agent.main
-
-## Terminal 3 — News Agent
 uv run python -m agents.news_agent.main
-
-## Terminal 4 — Report Agent
 uv run python -m agents.report_agent.main
-
-## Terminal 5 — SQL Agent
 uv run python -m agents.sql_agent.main
-
-## Terminal 6 — RAG Agent
 uv run python -m agents.rag_agent.main
-
-## Terminal 7 — Composio Agent
+uv run python -m agents.chat_agent.main
 uv run python -m agents.composio_agent.main
 
-## Terminal 8 — Entry Agent (start last)
+#  Master Orchestrator
 uv run python -m agents.entry_agent.main
 
-## Terminal 8 — Telegram Bot Service
-uv run python -m telegram_bot
+# Auth Service
+uv run python -m auth_server
+```
 
-## UI 
-Open index.html directly.
+### Production (Docker)
+```bash
+docker compose build 
+docker compose up
+```
 
-## Run using Docker
-
-- docker compose build 
-- docker compose up
-- Open the index.html
-
-## Dependencies for the system :
-
-#### Core framework-
-uv add fastapi "uvicorn[standard]" httpx pydantic pydantic-settings python-dotenv
-
-#### LLM-
-uv add groq
-
-#### MCP-
-uv add mcp
-
-#### Utilities-
-uv add tenacity structlog python-dateutil anyio
-
-#### Email-
-uv add aiosmtplib
-
-## Example Test Queries
-
-All queries below have been tested and verified working. Please type them directly in the UI chat box.
-
-### Weather
-
-what is the weather in delhi
+**Accessing the System:** 
+Opening the local `index.html` file in any modern browser connects directly to the Auth Server (`:8020`) and Entry Agent (`:8010`).
 
 ---
 
-### News
+##  WhatsApp Integration (Native Baileys)
 
-give latest news on donald trump
+Nexus now features a self-hosted, multi-tenant WhatsApp implementation using **Baileys**. Each user logged into Nexus receives their own isolated WhatsApp instance.
 
----
-### Normal Chat Queries
-hello, hi, what is your name, how can u help me, write a short story and email at your@gmail.com
-
-### SQL Database (Chinook Music DB)
-
-`how many artists are there in the music database` 
-COUNT = 275 
-
-`how many tables are there in database` 
-COUNT = 11
-
-`list the name of tables in database` 
-Album, Artist, Customer, Employee, Genre... 
-
-`list all columns of table Artist` 
-ArtistId (INTEGER), Name (NVARCHAR) 
-
-`list all artists in artists table` 
-275 rows — AC/DC, Accept, Aerosmith... 
-
----
-
-### Email via Gmail (Composio)
-
-- Requires `COMPOSIO_API_KEY` configured and Gmail account connected via Composio OAuth.
-
-`email me weather in delhi at your@gmail.com` 
-Sent via GMAIL to 'your@gmail.com'. 
-
-`make a report of tables in database and email me at your@gmail.com` 
-Report generated + emailed 
-
-`fetch the details of table from the database and make a report of it and email me at your@gmail.com` 
-DB details report emailed 
-
-`can you make a report of artists in artists table and email me at your@gmail.com` 
-Artists report emailed 
+### How to use WhatsApp Integration:
+1. **Start the Baileys Driver**:
+   ```bash
+   cd whatsapp_baileys
+   npm install
+   node index.js
+   ```
+   *(Runs the Evolution API proxy on port `8080`)*
+2. **Start the Onboarding Gateway**:
+   ```bash
+   uv run python -m whatsapp_green.main
+   ```
+   *(Runs the QR onboarding service on port `8031`)*
+3. **Link your Account**:
+   - In the frontend UI, click to connect WhatsApp, OR manually visit: `http://localhost:8031/connect/{your_nexus_user_id}`
+   - Scan the QR code with your WhatsApp app.
+4. **Interact**: 
+   - You can send text messages *to* the linked WhatsApp number, and the Nexus system will answer them.
+   - You can chat in the Web UI: *"send the weather report for Delhi to Vidhi HestaBit on WhatsApp"* to trigger outbound messages.
 
 ---
 
-### Report Agent Queries
-1. give me a report for weather in delhi
-2. fetch latest news about donald trump and make a report of it 
-3. send a report on pollution to your@gmail.com
+## Example Queries
+
+Here are simple, tested queries demonstrating each primary capability:
+
+**Weather**
+- `What is the weather in Delhi?`
+- `Generate a report for weather in New York`
+
+**News**
+- `Give me the latest news on Artificial Intelligence.`
+- `What is the latest news related to finance`
+
+**Database (SQL)**
+- `How many artists are in the database?`
+- `List the names of all the tables in the database.`
+
+**Legal QA (RAG)**
+- `What are the fundamental rights in the Indian Constitution?`
+- `Explain the Right to Information Act.`
+
+**Report Generation**
+- `Write a formal report on the weather in Tokyo.`
+- `Summarize the latest sports news into a report.`
+
+**Messaging**
+- `Send an email with the weather report of Delhi to your@gmail.com`
+- `Send the latest news about stocks to 9999999999 on WhatsApp`
+
+**Multi-Agent Chains**
+- `Fetch the latest news on Apple, write a report on it, and email it to user@gmail.com`
+- `What is the weather in Dubai? Send the result to 9999999999 on WhatsApp.`
 
 ---
 
-### WhatsApp Integration
-
-You can send queries and receive full AI responses directly on WhatsApp
-
-**Setup :**
-1. Setup a Meta WhatsApp Developer App (https://developers.facebook.com).
-2. Connect your WhatsApp Business account via Composio (https://app.composio.dev).
-3. Set your internal config in `.env.local`:
-   - `WHATSAPP_VERIFY_TOKEN`: Some secure string (e.g. `nexus_whatsapp_verify`)
-   - `WHATSAPP_PHONE_NUMBER_ID`: Your Meta-assigned phone number ID
-4. Start the Nexus MAS using Docker (`docker compose up`)
-5. Expose the gateway: `ngrok http 8015`
-6. In Meta Dashboard → Webhooks → Edit Subscription:
-   - Callback URL: `https://<ngrok-url>/whatsapp/webhook`
-   - Verify Token: The string you set above
-   - Subscribe to `messages` field
-7. Send a WhatsApp message to your business number!
-
-Example WhatsApp queries:
-- `what is the weather in delhi`
-- `fetch the details of table from the database and make a report of it`
-
----
-
-### Multi-Agent Chained Queries
-
-These queries trigger **multiple agents** in sequence automatically:
-
-`what is the weather in delhi? if it is more than 20 degrees then send me a report of artists in artists table at your@gmail.com` 
-Weather → SQL → Report → Composio | Report emailed with weather + artists data 
-
-`fetch the details of table from the database and make a report of it and email me at your@gmail.com` 
-SQL → Report → Composio | Full DB report emailed |
-
----
+##  External API Keys needed
+- **Groq LLM**: https://console.groq.com/keys
+- **NewsData.io**: https://newsdata.io/search-dashboard
+- **OpenWeatherMap**: https://home.openweathermap.org/api_keys
+- **Composio**: https://app.composio.dev
+- **Pinecone**: https://app.pinecone.io/
 
