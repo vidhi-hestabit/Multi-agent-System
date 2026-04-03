@@ -100,7 +100,7 @@ class ComposioAgent(BaseAgent):
         content = next(
             (str(context[k]) for k in CONTENT_KEYS if context.get(k)), instruction
         )
-        subject = await self._make_subject(context, instruction)
+        subject = await self._make_subject(context, instruction, content)
         # Generate a unique and persistent user_id (Baileys instance name)
         # STRICT REQUIREMENT: Only use MongoDB User ID. No fallbacks.
         user_id = context.get("user_id")
