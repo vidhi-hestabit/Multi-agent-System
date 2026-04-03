@@ -1,5 +1,5 @@
 # Multi-agent System
-A production-ready multi-agent AI system built on the **A2A (Agent-to-Agent) protocol** and **MCP (Model Context Protocol)**. Agents collaborate dynamically to answer queries — fetching weather, news, generating reports, querying databases, answering legal questions, and sending messages via Gmail/Slack/Telegram/Discord.
+A production-ready multi-agent AI system built on the **A2A (Agent-to-Agent) protocol** and **MCP (Model Context Protocol)**. Agents collaborate dynamically to answer queries — fetching weather, news, generating reports, querying databases, answering legal questions, and sending messages via Gmail/Slack.
 
 ## Architecture of system -
 
@@ -39,7 +39,7 @@ A production-ready multi-agent AI system built on the **A2A (Agent-to-Agent) pro
 | Report Agent | 8003 | Generates Markdown reports from context |
 | SQL Agent | 8005 | Answers Chinook music database questions |
 | RAG Agent | 8006 | Answers Indian law questions via FAISS |
-| Composio Agent | 8008 | Sends content via Gmail/Slack/Telegram/Discord |
+| Composio Agent | 8008 | Sends content via Gmail/Slack/ |
 | Entry Agent | 8010 | Coordinator — task store, resolver, LLM planner |
 
 ## Get your API keys here:

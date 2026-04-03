@@ -47,7 +47,7 @@ class QueryRequest(BaseModel):
     user_email: str = ""  # email from auth session
     
     # Optional direct hints — injected into context before resolver runs
-    composio_app: str = ""         # e.g. GMAIL | SLACK | TELEGRAM | DISCORD
+    composio_app: str = ""         # e.g. GMAIL | SLACK
     composio_recipient: str = ""   # email / channel id / chat id
 
     # Convenience alias kept for compatibility

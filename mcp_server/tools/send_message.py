@@ -6,13 +6,12 @@ from mcp_server.tools.composio_tool import handle as composio_handle
 from mcp_server.tools.send_whatsapp_green import handle as green_handle
 
 TOOL_NAME        = "send_message"
-TOOL_DESCRIPTION = "Send a message via GMAIL, SLACK, TELEGRAM, DISCORD, or WHATSAPP."
+TOOL_DESCRIPTION = "Send a message via GMAIL, SLACK, TELEGRAM, or WHATSAPP."
 
 _ACTIONS = {
     "GMAIL":    "GMAIL_SEND_EMAIL",
     "SLACK":    "SLACK_SENDS_A_MESSAGE_TO_A_SLACK_CHANNEL",
     "TELEGRAM": "TELEGRAM_SEND_MESSAGE",
-    "DISCORD":  "DISCORD_SEND_MESSAGE",
     "WHATSAPP": "WHATSAPP_SEND_MESSAGE",
 }
 

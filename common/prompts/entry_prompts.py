@@ -1,7 +1,7 @@
 ALL_OUTPUT_KEYS: dict[str, str] = {
     "weather_data":              "Current weather for a city (temperature, humidity, conditions)",
     "weather_data_text":         "Human-readable weather summary string",
-    "news_summary":              "Summary of recent news articles on a topic",
+    "news_summary":              "Summary of recent news articles on a mentioned trending news topic",
     "news_articles":             "Raw list of news articles (title, url, description)",
     "report_markdown":           "A complete formatted Markdown report",
     "message_sent_confirmation": "Confirmation that a message was sent via Composio",
@@ -25,7 +25,7 @@ No explanation. No markdown fences. Just the raw JSON array.
 Rules:
 - "sql_answer" is needed for ANY question about music, artists, albums, tracks, genres, or the "Chinook" database.
 - "message_sent_confirmation" is needed whenever the user says:
-  send, email, mail, post to Slack, message via Telegram, Discord, deliver, share, notify.
+  send, email, mail, post to Slack, message via Telegram, deliver, share, notify.
 - "report_markdown" is needed before "message_sent_confirmation" if a report is requested.
 - "news_summary" is needed before "report_markdown" for news-based reports.
 - Never include keys unrelated to the query.
